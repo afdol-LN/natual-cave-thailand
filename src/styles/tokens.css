@@ -1,29 +1,30 @@
 /*
  * Design tokens — แหล่งเดียวของสีในระบบ (SPEC §1)
- * สีมีแค่ 3 ค่านี้ เฉดอื่นต้องสร้างด้วย color-mix จากตัวแปรเหล่านี้เท่านั้น
- * typography / spacing / radius / motion นำมาจาก design.md "green-deck" (ไม่นำสีมาใช้)
+ * สีมีแค่ค่าใน Palette นี้ เฉดอื่นต้องสร้างด้วย color-mix จากตัวแปรเหล่านี้เท่านั้น
  */
 :root {
-  /* ── Palette (3 สี) ── */
+  /* ── Palette ── */
   --c-white: #FFFFFF;
-  --c-mint: #B3D8A8;
-  --c-teal: #3D8D7A;
+  --c-ink: #092328;
+  --c-green: #2A835F;
 
   /* ── บทบาท (ธีมสว่าง) ── */
   --c-bg: var(--c-white);
-  --c-surface: color-mix(in srgb, var(--c-mint) 16%, var(--c-white));
-  --c-surface-2: color-mix(in srgb, var(--c-mint) 32%, var(--c-white));
-  --c-line: var(--c-mint);
-  --c-text: var(--c-teal);
+  --c-surface: color-mix(in srgb, var(--c-green) 8%, var(--c-white));
+  --c-surface-2: color-mix(in srgb, var(--c-green) 16%, var(--c-white));
+  --c-line: color-mix(in srgb, var(--c-green) 35%, var(--c-white));
+  --c-text: var(--c-ink);
+  /* สีเน้น: ปุ่ม, แท็บ active, สถานะ, กราฟ, หมุด */
+  --c-accent: var(--c-green);
 
   /* เฉดที่ derive จากพาเลตต์ (ห้ามเพิ่ม hex) */
-  --c-text-muted: color-mix(in srgb, var(--c-text) 90%, var(--c-bg));
-  --c-text-faint: color-mix(in srgb, var(--c-text) 62%, var(--c-bg));
-  --c-line-strong: color-mix(in srgb, var(--c-line) 50%, var(--c-text));
+  --c-text-muted: color-mix(in srgb, var(--c-text) 72%, var(--c-bg));
+  --c-text-faint: color-mix(in srgb, var(--c-text) 45%, var(--c-bg));
+  --c-line-strong: color-mix(in srgb, var(--c-accent) 65%, var(--c-bg));
   --c-overlay: color-mix(in srgb, var(--c-bg) 72%, transparent);
   --c-hover: color-mix(in srgb, var(--c-surface-2) 70%, var(--c-line));
 
-  /* ── Typography (green-deck) ── */
+  /* ── Typography ── */
   --font-sans: 'DM Sans', 'Noto Sans Thai', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'Noto Sans Thai', monospace;
   --fs-hero: 64px;

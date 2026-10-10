@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { IconType } from 'react-icons';
+import { LuChartLine, LuLayoutGrid, LuLeaf, LuMountain } from 'react-icons/lu';
 import { Area, CartesianGrid, ComposedChart, Line, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { RISK_LABEL } from '../../api/analytics';
 import { getCaveConfig } from '../../config/caves';
@@ -7,7 +9,7 @@ import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
 import { fmtDateTime, fmtDuration, fmtValue } from '../../domain/format';
 import type { CaveId, Scenario, SensorKey } from '../../domain/types';
 import { useAlerts, useAnalytics, useForecast, useLatest, useSpecies } from '../../hooks/queries';
-import { C, LegendSwatch, Loading, Panel, SERIES_DASH, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
+import { C, Kpi, LegendSwatch, Loading, Panel, SERIES_DASH, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
 import { useUi } from '../../store';
 import { Gauge, RefugiaTag, RiskPips } from './parts';
 
@@ -18,8 +20,35 @@ const SCEN: { key: Scenario; label: string }[] = [
 ];
 const ABUNDANCE = { rare: 'พบน้อย', common: 'พบทั่วไป', abundant: 'พบมาก' } as const;
 
-export default function CaveView({ caveId }: { caveId: CaveId }) {
-  const cave = getCaveConfig(caveId);
+export type CaveTab = 'all' | 'stats' | 'bio' | 'geo';
+export const CAVE_TABS: { key: CaveTab; label: string; icon: IconType }[] = [
+  { key: 'all', label: 'รวมทุกหมวด', icon: LuLayoutGrid },
+  { key: 'stats', label: 'สถิติ', icon: LuChartLine },
+  { key: 'bio', label: 'ความหลากหลายทางชีวภาพ', icon: LuLeaf },
+  { key: 'geo', label: 'ภูมิศาสตร์และธรณีวิทยา', icon: LuMountain },
+];
+export const isCaveTab = (v: string | null): v is CaveTab => CAVE_TABS.some((t) => t.key === v);
+
+export default function CaveView({ caveId, tab }: { caveId: CaveId; tab: CaveTab }) {
+  if (tab === 'all')
+    return (
+      <div className="dash">
+        {CAVE_TABS.filter((t) => t.key !== 'all').map((t) => (
+          <section key={t.key} className="dash__section" aria-labelledby={`sec-${t.key}`}>
+            <h2 className="dash__section-title" id={`sec-${t.key}`}>
+              {t.label}
+            </h2>
+            <CaveView caveId={caveId} tab={t.key} />
+          </section>
+        ))}
+      </div>
+    );
+  if (tab === 'bio') return <BioView caveId={caveId} />;
+  if (tab === 'geo') return <GeoView caveId={caveId} />;
+  return <StatsView caveId={caveId} />;
+}
+
+function StatsView({ caveId }: { caveId: CaveId }) {
   const { data: analytics } = useAnalytics();
   const { data: latest } = useLatest(caveId);
   const a = analytics?.find((x) => x.caveId === caveId);
@@ -70,7 +99,7 @@ export default function CaveView({ caveId }: { caveId: CaveId }) {
                     <PolarGrid stroke={C.line} />
                     <PolarAngleAxis dataKey="axis" tick={{ fill: C.muted, fontSize: 11 }} />
                     <PolarRadiusAxis domain={[0, 1]} tick={false} axisLine={false} />
-                    <Radar dataKey="v" stroke={C.text} strokeWidth={2} fill={C.text} fillOpacity={0.22} isAnimationActive={false} dot={{ r: 3, fill: C.text }} />
+                    <Radar dataKey="v" stroke={C.accent} strokeWidth={2} fill={C.accent} fillOpacity={0.22} isAnimationActive={false} dot={{ r: 3, fill: C.accent }} />
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
@@ -83,11 +112,46 @@ export default function CaveView({ caveId }: { caveId: CaveId }) {
       </div>
 
       <div className="dash__row">
-        <SpeciesRiskPanel caveId={caveId} />
         <AlertTimeline caveId={caveId} />
       </div>
+    </div>
+  );
+}
 
-      <div className="info-grid">
+function BioView({ caveId }: { caveId: CaveId }) {
+  const { data } = useSpecies(caveId);
+  const total = data?.length;
+  const endemic = data?.filter((d) => d.species.endemic).length;
+  const rare = data?.filter((d) => d.occurrence.abundance === 'rare').length;
+  const { data: analytics } = useAnalytics();
+  const highRisk = analytics?.find((a) => a.caveId === caveId)?.speciesRisk.filter((r) => r.level === 'high').length;
+  return (
+    <div className="dash">
+      <div className="kpi-strip">
+        <Kpi label="ชนิดพันธุ์ที่พบ" value={total ?? '—'} unit="ชนิด" />
+        <Kpi label="ชนิดพันธุ์ถิ่นเดียว" value={endemic ?? '—'} unit="ชนิด" />
+        <Kpi label="พบน้อย" value={rare ?? '—'} unit="ชนิด" />
+        <Kpi label="ความเสี่ยงสูง" value={highRisk ?? '—'} unit="ชนิด" status={highRisk ? 'critical' : undefined} />
+      </div>
+      <div className="dash__row">
+        <SpeciesRiskPanel caveId={caveId} />
+        <SpeciesList caveId={caveId} className="span-6" />
+      </div>
+    </div>
+  );
+}
+
+function GeoView({ caveId }: { caveId: CaveId }) {
+  const cave = getCaveConfig(caveId);
+  return (
+    <div className="dash">
+      <div className="kpi-strip">
+        <Kpi label="ความสูง" value={cave.elevationM.toLocaleString('th-TH')} unit="ม. รทก." />
+        <Kpi label="ความยาวโถงสำรวจ" value={`~${cave.lengthM.toLocaleString('th-TH')}`} unit="ม." />
+        <Kpi label="ภูมิภาค" value={cave.region} sub={cave.province} />
+        <Kpi label="พิกัด" value={`${cave.lat.toFixed(4)}, ${cave.lon.toFixed(4)}`} sub={cave.coordsVerified ? 'ยืนยันแล้ว' : 'พิกัดยังไม่ยืนยัน'} />
+      </div>
+      <div className="info-grid info-grid--2">
         <InfoCard title="ภูมิศาสตร์" body={cave.geography} extra={`${cave.region} · สูง ${cave.elevationM} ม. รทก.`} />
         <InfoCard title="ธรณีวิทยา" body={cave.geology} extra={`ความยาวโถงสำรวจ ~${cave.lengthM.toLocaleString('th-TH')} ม.`} />
         <InfoCard title="อุทกวิทยา" body={cave.hydrology} />
@@ -97,8 +161,6 @@ export default function CaveView({ caveId }: { caveId: CaveId }) {
           extra={`${cave.lat.toFixed(4)}°N ${cave.lon.toFixed(4)}°E${cave.coordsVerified ? '' : ' (พิกัดยังไม่ยืนยัน)'}`}
         />
       </div>
-
-      <SpeciesList caveId={caveId} />
     </div>
   );
 }
@@ -174,7 +236,7 @@ function Forecast({ caveId }: { caveId: CaveId }) {
                 <Line
                   key={s.key}
                   dataKey={s.key}
-                  stroke={C.text}
+                  stroke={C.accent}
                   strokeWidth={scenario === s.key ? 2.5 : 1.25}
                   strokeOpacity={scenario === s.key ? 1 : 0.7}
                   strokeDasharray={SERIES_DASH[i]}
@@ -229,7 +291,7 @@ function AlertTimeline({ caveId }: { caveId: CaveId }) {
   const ack = useUi((s) => s.ack);
   const now = Date.now();
   return (
-    <Panel overline="Alert Timeline · 7 วัน" title="ไทม์ไลน์เหตุการณ์" className="span-6" id="alerts">
+    <Panel overline="Alert Timeline · 7 วัน" title="ไทม์ไลน์เหตุการณ์" id="alerts">
       {!alerts ? (
         <Loading />
       ) : alerts.length === 0 ? (
@@ -280,10 +342,10 @@ function InfoCard({ title, body, extra }: { title: string; body: string; extra?:
   );
 }
 
-function SpeciesList({ caveId }: { caveId: CaveId }) {
+function SpeciesList({ caveId, className }: { caveId: CaveId; className?: string }) {
   const { data } = useSpecies(caveId);
   return (
-    <Panel overline="Biodiversity (mock)" title="ชนิดพันธุ์ที่พบ">
+    <Panel overline="Biodiversity (mock)" title="ชนิดพันธุ์ที่พบ" className={className}>
       {!data ? (
         <Loading />
       ) : (

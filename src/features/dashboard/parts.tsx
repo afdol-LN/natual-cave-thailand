@@ -25,7 +25,7 @@ export function RiskPips({ level }: { level: RiskLevel }) {
   return (
     <svg width="34" height="10" viewBox="0 0 34 10" aria-hidden="true" className="pips">
       {[0, 1, 2].map((i) => (
-        <rect key={i} x={i * 12 + 0.5} y={0.5} width={9} height={9} rx={1.5} fill={i < n ? C.text : 'none'} stroke={i < n ? C.text : C.faint} />
+        <rect key={i} x={i * 12 + 0.5} y={0.5} width={9} height={9} rx={1.5} fill={i < n ? C.accent : 'none'} stroke={i < n ? C.accent : C.faint} />
       ))}
     </svg>
   );
@@ -45,7 +45,7 @@ export function Gauge({ value, label }: { value: number | null; label: string })
   return (
     <svg viewBox="0 0 200 120" className="gauge" role="img" aria-label={`${label} ${value ?? '—'} จาก 100`}>
       <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`} fill="none" stroke={C.line} strokeWidth={14} strokeLinecap="round" />
-      {value != null && v > 0 && <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 ${large} 1 ${x} ${y}`} fill="none" stroke={C.text} strokeWidth={14} strokeLinecap="round" />}
+      {value != null && v > 0 && <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 ${large} 1 ${x} ${y}`} fill="none" stroke={C.accent} strokeWidth={14} strokeLinecap="round" />}
       {ticks.map((t) => {
         const a = Math.PI * (1 - t / 100);
         return <line key={t} x1={cx + (R - 12) * Math.cos(a)} y1={cy - (R - 12) * Math.sin(a)} x2={cx + (R - 18) * Math.cos(a)} y2={cy - (R - 18) * Math.sin(a)} stroke={C.faint} strokeWidth={1.5} />;

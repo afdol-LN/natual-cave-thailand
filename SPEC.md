@@ -7,14 +7,8 @@
 
 ## 0) คำสั่งหลักที่ต้องทำ (จากเจ้าของโปรเจกต์)
 
-> Using designmd mcp, download the design system https://designmd.ai/chef/green-deck and implement it in my code
-
 **กฎสี (สำคัญที่สุด ห้ามละเมิด):**
 สีทั้งหมดในระบบต้องอิงจาก 5 สีด้านล่างเท่านั้น
-**ห้ามนำสีจาก design.md / green-deck มาใช้** ให้ดึงมาใช้เฉพาะสิ่งที่ไม่ใช่สี เช่น typography, spacing, radius, layout, รูปแบบ component, motion
-ถ้า design.md กำหนดสีใด ให้แทนด้วยสีจากพาเลตต์ด้านล่างเสมอ
-
-ข้อควรรู้: ผู้เขียนสเปกนี้ **ยังไม่ได้ดึง design.md** (ไม่มี designmd MCP ในเซสชันที่เขียน) ขั้นแรกของ Claude Code คือเรียก designmd MCP แล้วอ่านผลก่อนออกแบบ UI
 
 ---
 
@@ -90,7 +84,7 @@ Mapbox รับพิกัดเป็น **`[lon, lat]`**
 
 **ยังไม่มี (ต้องทำ):**
 - `src/App.tsx` (layout + nav 3 แท็บ + ตัวนับ alert + routes, lazy-load หน้า Overview)
-- `src/styles/tokens.css` + `src/styles.css` (ตามหัวข้อ 1 และ design.md; ตอนนี้ `main.tsx` import `./styles.css`)
+- `src/styles/tokens.css` + `src/styles.css` (ตามหัวข้อ 1; ตอนนี้ `main.tsx` import `./styles.css`)
 - `src/features/overview/OverviewPage.tsx`
 - `src/features/sensors/SensorsPage.tsx`
 - `src/features/dashboard/DashboardPage.tsx` (+ มุมมองรวม/มุมมองแยกถ้ำ)
@@ -130,7 +124,7 @@ Mapbox รับพิกัดเป็น **`[lon, lat]`**
 - **ชั้นข้อมูลสลับได้** UI เรียกผ่าน `hooks/queries.ts` → `api/index.ts` เท่านั้น ต่อ API จริงโดยแก้เฉพาะ `api/`
 - ถ้ำที่เลือกเก็บใน URL + store ให้ 3 หน้าตรงกัน
 - Mapbox โหลดแบบ lazy (`React.lazy`) หน้า 2–3 ต้องเปิดเร็ว
-- ภาษา UI เป็นไทย, ตัวเลขใช้ฟอนต์ mono (ฟอนต์ตาม design.md ได้ ถ้าไม่ใช่เรื่องสี)
+- ภาษา UI เป็นไทย, ตัวเลขใช้ฟอนต์ mono
 
 ---
 
@@ -153,7 +147,7 @@ npm test
 ## 8) เกณฑ์ตรวจรับ
 
 1. `npm run build` และ `npm test` ผ่าน
-2. ค้นทั้งโปรเจกต์แล้วไม่มี hex สีอื่นนอกจาก 5 สีในหัวข้อ 1 (ยกเว้น `tokens.css` ที่นิยามเอง) และไม่มีสีที่ดึงมาจาก design.md
+2. ค้นทั้งโปรเจกต์แล้วไม่มี hex สีอื่นนอกจาก 5 สีในหัวข้อ 1 (ยกเว้น `tokens.css` ที่นิยามเอง)
 3. แยกสถานะ 4 แบบได้โดยไม่พึ่งเฉดสี (ลองดูแบบ grayscale แล้วยังแยกออก)
 4. ไม่มี token Mapbox แล้วแอปยังใช้งานได้ ไม่มี error
 5. หมุดทั้ง 3 ตรงพิกัดที่ `config/caves.ts`; คลิกแล้วซูมเข้า; ลิงก์ไปหน้า 2/3 พาถ้ำที่เลือกไปด้วย

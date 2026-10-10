@@ -1,8 +1,8 @@
-// เกณฑ์ตรวจรับข้อ 2: ห้ามมี hex สีนอก tokens.css และต้องเป็น 3 สีของพาเลตต์เท่านั้น
+// เกณฑ์ตรวจรับข้อ 2: ห้ามมี hex สีนอก tokens.css และต้องเป็นสีของพาเลตต์เท่านั้น
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const ALLOWED = new Set(['#ffffff', '#b3d8a8', '#3d8d7a']);
+const ALLOWED = new Set(['#ffffff', '#092328', '#2a835f']);
 const TOKENS = join('src', 'styles', 'tokens.css');
 const files = [];
 const walk = (d) => {

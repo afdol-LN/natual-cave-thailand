@@ -22,10 +22,7 @@ export default function App() {
     <div className={`app${isOverview ? ' app--fullbleed' : ''}`}>
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Smart Cave Platform หน้าแรก">
-          <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M2 20 L8 6 L12 12 L15 8 L22 20 Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-            <path d="M10 20 Q12 15 14 20" fill="none" stroke="currentColor" strokeWidth="2" />
-          </svg>
+          <img src="/cave-logo.png" alt="" className="brand__logo" width="36" height="36" />
           <span className="brand__text">
             <strong>Smart Cave</strong>
             <span className="brand__sub">ศูนย์เฝ้าระวังระบบนิเวศถ้ำ</span>

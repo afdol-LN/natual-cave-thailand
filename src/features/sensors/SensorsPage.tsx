@@ -14,6 +14,7 @@ import {
   Panel,
   RangeBar,
   RangePicker,
+  SensorIcon,
   Sparkline,
   StatusBadge,
   StatusDot,
@@ -115,8 +116,13 @@ function SensorCard({
   return (
     <button className={`sensorcard sensorcard--${status}${active ? ' is-active' : ''}`} onClick={onOpen} aria-expanded={active}>
       <div className="sensorcard__head">
-        <span className="sensorcard__label">{def.label}</span>
-        <StatusBadge status={status} compact />
+        <span className="sensorcard__title">
+          <span className="sensorcard__icon">
+            <SensorIcon sensor={sensor} size={22} />
+          </span>
+          <span className="sensorcard__label">{def.label}</span>
+        </span>
+        <StatusBadge status={status} compact criticalIcon />
       </div>
       <div className="sensorcard__value">
         <span className="num">{fmtValue(sensor, latest?.value)}</span>
@@ -139,9 +145,9 @@ function BatteryIcon({ pct }: { pct: number }) {
   const w = Math.max(0, Math.min(14, (pct / 100) * 14));
   return (
     <svg width="20" height="10" viewBox="0 0 20 10" aria-hidden="true" className="battery">
-      <rect x="0.5" y="0.5" width="17" height="9" rx="2" fill="none" stroke={C.text} />
-      <rect x="18" y="3" width="2" height="4" fill={C.text} />
-      <rect x="2" y="2" width={w} height="6" fill={pct < 15 ? 'none' : C.text} stroke={pct < 15 ? C.text : 'none'} strokeDasharray="2 1" />
+      <rect x="0.5" y="0.5" width="17" height="9" rx="2" fill="none" stroke={C.accent} />
+      <rect x="18" y="3" width="2" height="4" fill={C.accent} />
+      <rect x="2" y="2" width={w} height="6" fill={pct < 15 ? 'none' : C.accent} stroke={pct < 15 ? C.accent : 'none'} strokeDasharray="2 1" />
     </svg>
   );
 }
@@ -232,14 +238,14 @@ function SensorChart({ caveId, sensor, range, onClose }: { caveId: CaveId; senso
               <Line
                 type="monotone"
                 dataKey="value"
-                stroke={C.text}
+                stroke={C.accent}
                 strokeWidth={2}
                 connectNulls={false}
                 isAnimationActive={false}
                 dot={(p: { cx?: number; cy?: number; payload?: { status: Status }; index?: number }) => (
                   <StatusDot key={`d${p.index}`} cx={p.cx} cy={p.cy} status={p.payload?.status} />
                 )}
-                activeDot={{ r: 4, fill: C.text, stroke: C.bg }}
+                activeDot={{ r: 4, fill: C.accent, stroke: C.bg }}
               />
             </ComposedChart>
           </ResponsiveContainer>

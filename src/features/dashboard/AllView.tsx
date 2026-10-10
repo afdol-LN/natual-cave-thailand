@@ -147,7 +147,7 @@ function CompareChart() {
                 key={c.id}
                 dataKey={c.id}
                 type="monotone"
-                stroke={C.text}
+                stroke={C.accent}
                 strokeWidth={i === 0 ? 2 : 1.75}
                 strokeDasharray={SERIES_DASH[i]}
                 isAnimationActive={false}
@@ -182,7 +182,7 @@ function DailyBars() {
         {CAVES.map((c, i) => (
           <span className="legend-item" key={c.id}>
             <svg width={14} height={14} aria-hidden="true">
-              <rect x={0.5} y={0.5} width={13} height={13} fill={`url(#${PATTERNS[i]})`} stroke={C.text} />
+              <rect x={0.5} y={0.5} width={13} height={13} fill={`url(#${PATTERNS[i]})`} stroke={C.accent} />
             </svg>
             {c.name}
           </span>
@@ -204,7 +204,7 @@ function DailyBars() {
                 formatter={(v: number, name: string) => [`${v} ครั้ง`, CAVES.find((c) => c.id === name)?.name ?? name]}
               />
               {CAVES.map((c, i) => (
-                <Bar key={c.id} dataKey={c.id} fill={`url(#${PATTERNS[i]})`} stroke={C.text} strokeWidth={1} isAnimationActive={false} />
+                <Bar key={c.id} dataKey={c.id} fill={`url(#${PATTERNS[i]})`} stroke={C.accent} strokeWidth={1} isAnimationActive={false} />
               ))}
             </BarChart>
           </ResponsiveContainer>
@@ -219,15 +219,15 @@ function PatternDefs() {
   return (
     <defs>
       <pattern id="pat-solid" width="4" height="4" patternUnits="userSpaceOnUse">
-        <rect width="4" height="4" fill={C.text} />
+        <rect width="4" height="4" fill={C.accent} />
       </pattern>
       <pattern id="pat-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
         <rect width="6" height="6" fill={C.surface} />
-        <line x1="0" y1="0" x2="0" y2="6" stroke={C.text} strokeWidth="2.5" />
+        <line x1="0" y1="0" x2="0" y2="6" stroke={C.accent} strokeWidth="2.5" />
       </pattern>
       <pattern id="pat-dots" width="5" height="5" patternUnits="userSpaceOnUse">
         <rect width="5" height="5" fill={C.surface} />
-        <circle cx="2.5" cy="2.5" r="1.2" fill={C.text} />
+        <circle cx="2.5" cy="2.5" r="1.2" fill={C.accent} />
       </pattern>
     </defs>
   );

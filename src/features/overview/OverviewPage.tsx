@@ -22,6 +22,8 @@ export default function OverviewPage() {
   const [resetKey, setResetKey] = useState(0);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [rightOpen, setRightOpen] = useState(true);
 
   const statusByCave = useMemo(() => {
     const m = {} as Record<CaveId, Status>;
@@ -35,6 +37,7 @@ export default function OverviewPage() {
     if (id) {
       setCave(id);
       setSheetOpen(true);
+      setRightOpen(true);
     }
   };
   const reset = () => {
@@ -72,11 +75,13 @@ export default function OverviewPage() {
         <NoMapFallback failed={mapFailed} statusByCave={statusByCave} healthByCave={healthByCave} selected={selected} onSelect={select} />
       )}
 
-      <div className={`overview__panels${sheetOpen ? ' is-open' : ''}`}>
+      <div className={`overview__panels${sheetOpen ? ' is-open' : ''}${leftOpen ? '' : ' left-closed'}${rightOpen ? '' : ' right-closed'}`}>
         <button className="sheet-handle" onClick={() => setSheetOpen((v) => !v)} aria-expanded={sheetOpen}>
           <span className="sheet-handle__grip" />
           <span>{sheetOpen ? 'ย่อแผง' : `ข้อมูลประเทศ · alert ${openAlerts.length}`}</span>
         </button>
+        <SideToggle side="left" open={leftOpen} onToggle={() => setLeftOpen((v) => !v)} label="สถานะทั่วประเทศ" />
+        <SideToggle side="right" open={rightOpen} onToggle={() => setRightOpen((v) => !v)} label={`Alert ${openAlerts.length}`} />
         <div className="overview__left">
           <Panel overline="National Smart Cave Platform" title="สถานะทั่วประเทศ">
             <div className="kpi-grid kpi-grid--2">
@@ -124,6 +129,19 @@ export default function OverviewPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** แถบเปิด/ปิดแผงข้าง (เฉพาะจอกว้างที่มีแผนที่) */
+function SideToggle({ side, open, onToggle, label }: { side: 'left' | 'right'; open: boolean; onToggle: () => void; label: string }) {
+  const arrow = (side === 'left') === open ? '‹' : '›';
+  return (
+    <button className={`side-toggle side-toggle--${side}`} onClick={onToggle} aria-expanded={open} aria-label={open ? `ซ่อนแผง${label}` : `แสดงแผง${label}`} title={open ? 'ซ่อนแผง' : 'แสดงแผง'}>
+      <span className="side-toggle__arrow" aria-hidden="true">
+        {arrow}
+      </span>
+      {!open && <span className="side-toggle__label">{label}</span>}
+    </button>
   );
 }
 

@@ -1,10 +1,12 @@
 import { useEffect, type ReactNode } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { CAVES, isCaveId } from '../config/caves';
 import { SENSORS } from '../config/sensors';
 import { fmtValue, RANGE_LABEL } from '../domain/format';
 import { STATUS_LABEL } from '../domain/status';
 import type { CaveId, RangeKey, Reading, SensorKey, Status } from '../domain/types';
+import type { IconType } from 'react-icons';
+import { LuCloud, LuDroplets, LuThermometer, LuTriangleAlert, LuWaves, LuWind } from 'react-icons/lu';
 import { useUi } from '../store';
 
 /**
@@ -18,6 +20,7 @@ export const C = {
   line: 'var(--c-line)',
   lineStrong: 'var(--c-line-strong)',
   text: 'var(--c-text)',
+  accent: 'var(--c-accent)',
   muted: 'var(--c-text-muted)',
   faint: 'var(--c-text-faint)',
 } as const;
@@ -41,8 +44,8 @@ export function StatusGlyph({ status, size = 12, pulse = true }: { status: Statu
       viewBox={`0 0 ${s} ${s}`}
       aria-hidden="true"
     >
-      {status === 'normal' && <circle cx={r} cy={r} r={r - 1} fill={C.text} />}
-      {status === 'watch' && <circle cx={r} cy={r} r={r - 1.5} fill="none" stroke={C.text} strokeWidth={2} />}
+      {status === 'normal' && <circle cx={r} cy={r} r={r - 1} fill={C.accent} />}
+      {status === 'watch' && <circle cx={r} cy={r} r={r - 1.5} fill="none" stroke={C.accent} strokeWidth={2} />}
       {status === 'critical' && <polygon points={`${r},1 ${s - 1},${s - 1} 1,${s - 1}`} fill="currentColor" />}
       {status === 'offline' && (
         <>
@@ -54,7 +57,15 @@ export function StatusGlyph({ status, size = 12, pulse = true }: { status: Statu
   );
 }
 
-export function StatusBadge({ status, compact = false }: { status: Status; compact?: boolean }) {
+/** criticalIcon: แสดงสถานะวิกฤตเป็นไอคอนเตือนแทนข้อความ (ข้อความยังอยู่สำหรับ screen reader) */
+export function StatusBadge({ status, compact = false, criticalIcon = false }: { status: Status; compact?: boolean; criticalIcon?: boolean }) {
+  if (criticalIcon && status === 'critical') {
+    return (
+      <span className="badge badge--critical badge--icon" role="status" aria-label={STATUS_LABEL[status]} title={STATUS_LABEL[status]}>
+        <LuTriangleAlert size={compact ? 16 : 18} aria-hidden="true" />
+      </span>
+    );
+  }
   return (
     <span className={`badge badge--${status}${compact ? ' badge--compact' : ''}`} role="status">
       <StatusGlyph status={status} size={compact ? 10 : 12} />
@@ -69,31 +80,45 @@ export function StatusDot(props: { cx?: number; cy?: number; status?: Status; si
   if (cx == null || cy == null || !status || status === 'normal') return null;
   const r = size / 2;
   if (status === 'critical')
-    return <polygon points={`${cx},${cy - r} ${cx + r},${cy + r * 0.8} ${cx - r},${cy + r * 0.8}`} fill={C.text} stroke={C.bg} strokeWidth={1} />;
-  if (status === 'watch') return <circle cx={cx} cy={cy} r={r - 1} fill={C.bg} stroke={C.text} strokeWidth={2} />;
+    return <polygon points={`${cx},${cy - r} ${cx + r},${cy + r * 0.8} ${cx - r},${cy + r * 0.8}`} fill={C.accent} stroke={C.bg} strokeWidth={1} />;
+  if (status === 'watch') return <circle cx={cx} cy={cy} r={r - 1} fill={C.bg} stroke={C.accent} strokeWidth={2} />;
   return <circle cx={cx} cy={cy} r={r - 2} fill={C.bg} stroke={C.faint} strokeWidth={1.5} />;
 }
 
 export function SeriesMarker({ cx, cy, shape, size = 7, filled = true }: { cx?: number; cy?: number; shape: MarkerShape; size?: number; filled?: boolean }) {
   if (cx == null || cy == null) return null;
   const r = size / 2;
-  const fill = filled ? C.text : C.bg;
-  if (shape === 'square') return <rect x={cx - r} y={cy - r} width={size} height={size} fill={fill} stroke={C.text} strokeWidth={1.5} />;
+  const fill = filled ? C.accent : C.bg;
+  if (shape === 'square') return <rect x={cx - r} y={cy - r} width={size} height={size} fill={fill} stroke={C.accent} strokeWidth={1.5} />;
   if (shape === 'diamond')
-    return <polygon points={`${cx},${cy - r - 1} ${cx + r + 1},${cy} ${cx},${cy + r + 1} ${cx - r - 1},${cy}`} fill={fill} stroke={C.text} strokeWidth={1.5} />;
-  return <circle cx={cx} cy={cy} r={r} fill={fill} stroke={C.text} strokeWidth={1.5} />;
+    return <polygon points={`${cx},${cy - r - 1} ${cx + r + 1},${cy} ${cx},${cy + r + 1} ${cx - r - 1},${cy}`} fill={fill} stroke={C.accent} strokeWidth={1.5} />;
+  return <circle cx={cx} cy={cy} r={r} fill={fill} stroke={C.accent} strokeWidth={1.5} />;
 }
 
 export function LegendSwatch({ index, label }: { index: number; label: string }) {
   return (
     <span className="legend-item">
       <svg width={30} height={12} aria-hidden="true">
-        <line x1={0} y1={6} x2={30} y2={6} stroke={C.text} strokeWidth={2} strokeDasharray={SERIES_DASH[index % 3]} />
+        <line x1={0} y1={6} x2={30} y2={6} stroke={C.accent} strokeWidth={2} strokeDasharray={SERIES_DASH[index % 3]} />
         <SeriesMarker cx={15} cy={6} shape={SERIES_MARKER[index % 3]} size={6} />
       </svg>
       {label}
     </span>
   );
+}
+
+/** ไอคอนประจำตัวแปร (Lucide ผ่าน react-icons) */
+const SENSOR_ICON: Record<SensorKey, IconType> = {
+  temp: LuThermometer,
+  humidity: LuDroplets,
+  co2: LuCloud,
+  o2: LuWind,
+  water: LuWaves,
+};
+
+export function SensorIcon({ sensor, size = 28, className }: { sensor: SensorKey; size?: number; className?: string }) {
+  const Icon = SENSOR_ICON[sensor];
+  return <Icon size={size} className={className} aria-hidden="true" />;
 }
 
 // ───────────────────────── Layout primitives ─────────────────────────
@@ -242,7 +267,7 @@ export function Sparkline({ data, sensor, height = 40 }: { data: Reading[] | und
   return (
     <svg className="sparkline" viewBox={`0 0 ${W} ${height}`} preserveAspectRatio="none" height={height} aria-hidden="true">
       <rect x={0} y={ny0} width={W} height={Math.max(0, ny1 - ny0)} fill={C.line} opacity={0.6} />
-      <path d={d} fill="none" stroke={C.text} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+      <path d={d} fill="none" stroke={C.accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -264,6 +289,7 @@ export function ValueText({ sensor, value }: { sensor: SensorKey; value: number 
 export function useCaveRoute(base: '/sensors' | '/dashboard', allowAll: boolean): [CaveId | 'all' | null, (v: CaveId | 'all') => void] {
   const { caveId: param } = useParams();
   const navigate = useNavigate();
+  const { search } = useLocation();
   const stored = useUi((s) => s.caveId);
   const setCave = useUi((s) => s.setCave);
 
@@ -279,7 +305,8 @@ export function useCaveRoute(base: '/sensors' | '/dashboard', allowAll: boolean)
 
   const select = (v: CaveId | 'all') => {
     setCave(v === 'all' ? null : v);
-    navigate(`${base}/${v}`);
+    // คง query (เช่นแท็บ ?view=) ไว้เมื่อสลับถ้ำ
+    navigate({ pathname: `${base}/${v}`, search });
   };
   return [valid, select];
 }

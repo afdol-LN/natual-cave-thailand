@@ -2,7 +2,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-const ALLOWED = new Set(['#ffffff', '#092328', '#2a835f']);
+const ALLOWED = new Set(['#ffffff', '#092328', '#2a835f', '#3ba7e5', '#f28c28', '#b79ce0']);
 const TOKENS = join('src', 'styles', 'tokens.css');
 const files = [];
 const walk = (d) => {

@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import { CartesianGrid, ComposedChart, Line, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { getCaveConfig } from '../../config/caves';
 import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
 import { fmtAgo, fmtAxisTime, fmtDateTime, fmtValue, RANGE_LABEL } from '../../domain/format';
 import { statusOf, worstStatus } from '../../domain/status';
@@ -21,6 +20,9 @@ import {
   StatusGlyph,
   useCaveRoute,
 } from '../../shared/ui';
+import { Link } from 'react-router-dom';
+import { LuRadioTower } from 'react-icons/lu';
+import { useCave } from '../../registry';
 import { useUi } from '../../store';
 
 export default function SensorsPage() {
@@ -51,7 +53,8 @@ function SensorsView({
   const setRange = useUi((s) => s.setRange);
   const [open, setOpen] = useState<SensorKey | null>(null);
   const { data: devices } = useDevices(caveId);
-  const cave = getCaveConfig(caveId);
+  const cave = useCave(caveId);
+  if (!cave) return <Loading />;
 
   return (
     <div className="page">
@@ -60,7 +63,7 @@ function SensorsView({
           <div className="overline">IoT Sensors · {cave.id}</div>
           <h1 className="page__title">{cave.name}</h1>
           <p className="muted">
-            {cave.province} · เซนเซอร์ 5 ตัว · อัปเดตทุก 3 วินาที
+            {cave.province} · {cave.hasSensors ? 'เซนเซอร์ 5 ตัว · อัปเดตทุก 3 วินาที' : 'ยังไม่มีเซนเซอร์'}
           </p>
         </div>
       </div>
@@ -69,26 +72,39 @@ function SensorsView({
         <RangePicker value={range} onChange={setRange} />
       </div>
 
-      <div className="sensor-grid">
-        {SENSOR_KEYS.map((k) => (
-          <SensorCard
-            key={k}
-            caveId={caveId}
-            sensor={k}
-            range={range}
-            latest={latest.find((l) => l.sensor === k)}
-            device={devices?.find((d) => d.sensor === k)}
-            active={open === k}
-            onOpen={() => setOpen(open === k ? null : k)}
-          />
-        ))}
-      </div>
+      {!cave.hasSensors ? (
+        <div className="empty-state">
+          <LuRadioTower size={36} aria-hidden="true" />
+          <h3>ถ้ำนี้ยังไม่มีเซนเซอร์</h3>
+          <p className="muted">ถ้ำนี้ลงฐานข้อมูลไว้แล้วแต่ยังไม่ได้ติดตั้งอุปกรณ์ตรวจวัด</p>
+          <Link to={`/dashboard/${cave.id}?view=info`} className="btn btn--pill btn--sm">
+            ดูข้อมูลถ้ำ
+          </Link>
+        </div>
+      ) : (
+        <>
+          <div className="sensor-grid">
+            {SENSOR_KEYS.map((k) => (
+              <SensorCard
+                key={k}
+                caveId={caveId}
+                sensor={k}
+                range={range}
+                latest={latest.find((l) => l.sensor === k)}
+                device={devices?.find((d) => d.sensor === k)}
+                active={open === k}
+                onOpen={() => setOpen(open === k ? null : k)}
+              />
+            ))}
+          </div>
 
-      {open && <SensorChart caveId={caveId} sensor={open} range={range} onClose={() => setOpen(null)} />}
+          {open && <SensorChart caveId={caveId} sensor={open} range={range} onClose={() => setOpen(null)} />}
 
-      <Panel overline="Devices" title="สถานะอุปกรณ์">
-        <DeviceTable devices={devices} />
-      </Panel>
+          <Panel overline="Devices" title="สถานะอุปกรณ์">
+            <DeviceTable devices={devices} />
+          </Panel>
+        </>
+      )}
     </div>
   );
 }
@@ -154,7 +170,7 @@ function BatteryIcon({ pct }: { pct: number }) {
 
 function SensorChart({ caveId, sensor, range, onClose }: { caveId: CaveId; sensor: SensorKey; range: RangeKey; onClose: () => void }) {
   const def = SENSORS[sensor];
-  const cave = getCaveConfig(caveId);
+  const cave = useCave(caveId);
   const { data, isLoading } = useSeries(caveId, sensor, range);
   const rows = useMemo(() => (data ?? []).map((r) => ({ ...r, status: statusOf(sensor, r.value) })), [data, sensor]);
   const vals = rows.filter((r) => r.value != null).map((r) => r.value!);
@@ -172,7 +188,7 @@ function SensorChart({ caveId, sensor, range, onClose }: { caveId: CaveId; senso
 
   return (
     <Panel
-      overline={`${cave.name} · ${RANGE_LABEL[range]}`}
+      overline={`${cave?.name ?? caveId} · ${RANGE_LABEL[range]}`}
       title={`${def.label} (${def.unit})`}
       className="chartpanel"
       actions={

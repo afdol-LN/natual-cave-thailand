@@ -1,33 +1,63 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { CAVES } from '../../config/caves';
 import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
-import { fmtAxisTime, fmtDateTime, fmtDay, fmtNum, fmtValue } from '../../domain/format';
+import { fmtAxisTime, fmtDateTime, fmtDay, fmtValue } from '../../domain/format';
 import { worstStatus } from '../../domain/status';
-import type { RangeKey, SensorKey } from '../../domain/types';
+import type { CaveId, RangeKey, SensorKey } from '../../domain/types';
 import { useAnalytics, useDailyAnomalies, useLatest, useOpenAlerts, useSeries } from '../../hooks/queries';
+import { useSensorCaveList } from '../../registry';
 import { C, Kpi, LegendSwatch, Loading, Panel, RangePicker, SERIES_DASH, SERIES_MARKER, SeriesMarker, StatusBadge } from '../../shared/ui';
+import { CaveChecklist, IndexRadar, IndexTable } from './IndexRadar';
 import { RefugiaTag } from './parts';
 
 export default function AllView() {
+  const caves = useSensorCaveList();
   const { data: latest } = useLatest();
   const { data: analytics } = useAnalytics();
   const open = useOpenAlerts();
 
   const activeSensors = (latest ?? []).filter((l) => l.status !== 'offline').length;
-  const avgHealth = analytics?.length ? analytics.reduce((s, a) => s + a.health, 0) / analytics.length : null;
+  const avgChi = analytics?.length ? analytics.reduce((s, a) => s + a.indices.chi, 0) / analytics.length : null;
+  const indexSeries = (analytics ?? []).map((a) => ({ caveId: a.caveId, indices: a.indices }));
+  // ถ้ำที่เลือกแสดงบน radar (ค่าเริ่มต้น: ทุกถ้ำ)
+  const [shown, setShown] = useState<Set<CaveId>>(() => new Set(caves.map((c) => c.id)));
+  const toggleShown = (id: CaveId) =>
+    setShown((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const radarSeries = indexSeries.filter((s) => shown.has(s.caveId));
   const ranking = [...(analytics ?? [])].sort((a, b) => b.vulnerability.index - a.vulnerability.index);
   const critical = open.filter((a) => a.level === 'critical').length;
 
   return (
     <div className="dash">
       <div className="kpi-strip">
-        <Kpi label="ถ้ำที่เฝ้าติดตาม" value={CAVES.length} sub="3 ภูมิภาค" />
-        <Kpi label="เซนเซอร์ออนไลน์" value={`${activeSensors}/${CAVES.length * SENSOR_KEYS.length}`} />
+        <Kpi label="ถ้ำที่เฝ้าติดตาม" value={caves.length} sub="ที่มีเซนเซอร์" />
+        <Kpi label="เซนเซอร์ออนไลน์" value={`${activeSensors}/${caves.length * SENSOR_KEYS.length}`} />
         <Kpi label="Alert ที่เปิดอยู่" value={open.length} sub={`วิกฤต ${critical} รายการ`} status={critical ? 'critical' : undefined} />
-        <Kpi label="ดัชนีสุขภาพเฉลี่ย" value={fmtNum(avgHealth)} unit="/100" />
-        <Kpi label="เปราะบางที่สุด" value={ranking[0] ? CAVES.find((c) => c.id === ranking[0].caveId)!.name : '—'} />
+        <Kpi label="CHI เฉลี่ย" value={avgChi == null ? '—' : avgChi.toFixed(2)} unit="/ 1" sub="Cave Health Index" />
+        <Kpi label="เปราะบางที่สุด" value={ranking[0] ? caves.find((c) => c.id === ranking[0].caveId)!.name : '—'} />
+      </div>
+
+      <div className="dash__row">
+        <Panel overline="Cave Indices · 0–1" title="ดัชนีถ้ำ 7 มิติ เทียบ 3 ถ้ำ" className="span-5">
+          <CaveChecklist ids={caves.map((c) => c.id)} selected={shown} onToggle={toggleShown} />
+          {!analytics ? (
+            <Loading />
+          ) : radarSeries.length ? (
+            <IndexRadar series={radarSeries} height={340} />
+          ) : (
+            <p className="radar-empty muted">เลือกอย่างน้อย 1 ถ้ำเพื่อแสดงกราฟ</p>
+          )}
+          <p className="muted small">CHI คำนวณจากเซนเซอร์ทั้ง 5 ตัว · อีก 6 ดัชนีเป็นข้อมูลจำลอง (mock)</p>
+        </Panel>
+        <Panel overline="Cave Indices" title="ค่าดัชนีรายถ้ำ" className="span-7">
+          {analytics ? <IndexTable series={indexSeries} /> : <Loading />}
+        </Panel>
       </div>
 
       <CompareChart />
@@ -44,14 +74,14 @@ export default function AllView() {
                     <th>#</th>
                     <th>ถ้ำ</th>
                     <th>ดัชนีความเปราะบาง</th>
-                    <th className="r">สุขภาพ</th>
+                    <th className="r">CHI</th>
                     <th>สถานะ</th>
                     <th>Refugia</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ranking.map((a, i) => {
-                    const cave = CAVES.find((c) => c.id === a.caveId)!;
+                    const cave = caves.find((c) => c.id === a.caveId)!;
                     const st = worstStatus((latest ?? []).filter((l) => l.caveId === a.caveId).map((l) => l.status));
                     return (
                       <tr key={a.caveId}>
@@ -68,7 +98,7 @@ export default function AllView() {
                             <span className="num meter__val">{a.vulnerability.index.toFixed(2)}</span>
                           </div>
                         </td>
-                        <td className="r num">{a.health}</td>
+                        <td className="r num">{a.indices.chi.toFixed(2)}</td>
                         <td>
                           <StatusBadge status={st} compact />
                         </td>
@@ -90,6 +120,7 @@ export default function AllView() {
 }
 
 function CompareChart() {
+  const caves = useSensorCaveList();
   const [sensor, setSensor] = useState<SensorKey>('temp');
   const [range, setRange] = useState<RangeKey>('24h');
   const q0 = useSeries('CNX-001', sensor, range);
@@ -102,7 +133,7 @@ function CompareChart() {
     [q0.data, q1.data, q2.data].forEach((d, i) =>
       (d ?? []).forEach((r) => {
         const row = m.get(r.ts) ?? { ts: r.ts };
-        row[CAVES[i].id] = r.value;
+        row[caves[i].id] = r.value;
         m.set(r.ts, row);
       }),
     );
@@ -124,7 +155,7 @@ function CompareChart() {
         ))}
       </div>
       <div className="chart-legend">
-        {CAVES.map((c, i) => (
+        {caves.map((c, i) => (
           <LegendSwatch key={c.id} index={i} label={c.name} />
         ))}
         <span className="legend-item">
@@ -140,9 +171,9 @@ function CompareChart() {
             <Tooltip
               contentStyle={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text }}
               labelFormatter={(v) => fmtDateTime(Number(v))}
-              formatter={(v: number, name: string) => [`${fmtValue(sensor, v)} ${def.unit}`, CAVES.find((c) => c.id === name)?.name ?? name]}
+              formatter={(v: number, name: string) => [`${fmtValue(sensor, v)} ${def.unit}`, caves.find((c) => c.id === name)?.name ?? name]}
             />
-            {CAVES.map((c, i) => (
+            {caves.map((c, i) => (
               <Line
                 key={c.id}
                 dataKey={c.id}
@@ -171,6 +202,7 @@ function CompareChart() {
 const PATTERNS = ['pat-solid', 'pat-hatch', 'pat-dots'] as const;
 
 function DailyBars() {
+  const caves = useSensorCaveList();
   const { data } = useDailyAnomalies(7);
   const rows = (data ?? []).map((d) => ({ day: d.day, ...d.counts }));
   return (
@@ -179,7 +211,7 @@ function DailyBars() {
         <PatternDefs />
       </svg>
       <div className="chart-legend">
-        {CAVES.map((c, i) => (
+        {caves.map((c, i) => (
           <span className="legend-item" key={c.id}>
             <svg width={14} height={14} aria-hidden="true">
               <rect x={0.5} y={0.5} width={13} height={13} fill={`url(#${PATTERNS[i]})`} stroke={C.accent} />
@@ -201,9 +233,9 @@ function DailyBars() {
                 cursor={{ fill: C.surface2 }}
                 contentStyle={{ background: C.surface2, border: `1px solid ${C.line}`, borderRadius: 8, color: C.text }}
                 labelFormatter={(v) => fmtDay(Number(v))}
-                formatter={(v: number, name: string) => [`${v} ครั้ง`, CAVES.find((c) => c.id === name)?.name ?? name]}
+                formatter={(v: number, name: string) => [`${v} ครั้ง`, caves.find((c) => c.id === name)?.name ?? name]}
               />
-              {CAVES.map((c, i) => (
+              {caves.map((c, i) => (
                 <Bar key={c.id} dataKey={c.id} fill={`url(#${PATTERNS[i]})`} stroke={C.accent} strokeWidth={1} isAnimationActive={false} />
               ))}
             </BarChart>

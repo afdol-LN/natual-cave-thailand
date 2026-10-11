@@ -1,16 +1,20 @@
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { useEffect, useRef, useState } from 'react';
 import Map, { Marker, NavigationControl, useMap, type MapRef } from 'react-map-gl';
-import { CAVES, THAILAND_VIEW } from '../../config/caves';
+import { THAILAND_VIEW } from '../../config/caves';
 import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
 import { fmtValue } from '../../domain/format';
-import type { CaveId, Latest, Status } from '../../domain/types';
-import { StatusBadge, StatusGlyph } from '../../shared/ui';
+import type { CaveId, CaveRecord, Latest } from '../../domain/types';
+import { NoSensorBadge, StatusBadge, StatusGlyph } from '../../shared/ui';
+import InventorySummary from '../registry/InventorySummary';
+import type { HealthMap, StatusMap } from './OverviewPage';
 
 interface Props {
   token: string;
-  statusByCave: Record<CaveId, Status>;
-  healthByCave: Record<CaveId, number>;
+  /** ถ้ำทั้งหมดในทะเบียน */
+  caves: CaveRecord[];
+  statusByCave: StatusMap;
+  healthByCave: HealthMap;
   latest: Latest[];
   selected: CaveId | null;
   onSelect: (id: CaveId) => void;
@@ -57,9 +61,26 @@ function addTerrain(map: mapboxgl.Map) {
 
 const reduceMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-export default function GlobeMap({ token: accessToken, statusByCave, healthByCave, latest, selected, onSelect, resetKey, onError }: Props) {
+const stop = (e: { stopPropagation: () => void }) => e.stopPropagation();
+
+export default function GlobeMap({ token: accessToken, caves, statusByCave, healthByCave, latest, selected, onSelect, resetKey, onError }: Props) {
   const mapRef = useRef<MapRef>(null);
   const [hover, setHover] = useState<CaveId | null>(null);
+  // ปิด hovercard แบบหน่วงเวลา ให้เลื่อนเมาส์จากหมุดขึ้นไปบนการ์ดได้โดยการ์ดไม่หาย
+  const closeTimer = useRef<number | undefined>(undefined);
+  const openCard = (id: CaveId) => {
+    window.clearTimeout(closeTimer.current);
+    setHover(id);
+  };
+  const closeCard = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => setHover(null), 250);
+  };
+  // blur (เช่นคลิกเข้า iframe ทัวร์) ปิดการ์ดเฉพาะเมื่อเมาส์ไม่ได้อยู่บนหมุด/การ์ด
+  const blurCard = (e: { currentTarget: Element }) => {
+    if (!e.currentTarget.closest('.pin-wrap')?.matches(':hover')) closeCard();
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
 
   // reset view
   useEffect(() => {
@@ -70,7 +91,8 @@ export default function GlobeMap({ token: accessToken, statusByCave, healthByCav
   // fly ไปถ้ำที่เลือก (รวมกรณีเลือกจากแผงข้าง)
   useEffect(() => {
     if (!selected) return;
-    const c = CAVES.find((x) => x.id === selected)!;
+    const c = caves.find((x) => x.id === selected);
+    if (!c) return;
     mapRef.current?.flyTo({ center: [c.lon, c.lat], zoom: 13.5, pitch: 65, bearing: -20, duration: reduceMotion() ? 0 : 3600, essential: true });
   }, [selected]);
 
@@ -100,55 +122,88 @@ export default function GlobeMap({ token: accessToken, statusByCave, healthByCav
     >
       <NavigationControl position="bottom-right" showCompass={false} />
       <Compass />
-      {CAVES.map((c) => {
+      {caves.map((c) => {
         const st = statusByCave[c.id];
         const rows = latest.filter((l) => l.caveId === c.id);
         return (
           <Marker key={c.id} longitude={c.lon} latitude={c.lat} anchor="bottom" style={{ zIndex: hover === c.id ? 3 : selected === c.id ? 2 : 1 }}>
-            <div className="pin-wrap" onMouseEnter={() => setHover(c.id)} onMouseLeave={() => setHover(null)}>
+            <div className="pin-wrap" onMouseEnter={() => openCard(c.id)} onMouseLeave={closeCard}>
               <button
-                className={`pin pin--${st}${selected === c.id ? ' is-selected' : ''}`}
+                className={`pin pin--${st ?? 'nosensor'}${selected === c.id ? ' is-selected' : ''}`}
                 onClick={(ev) => {
                   ev.stopPropagation();
                   onSelect(c.id);
                 }}
-                onFocus={() => setHover(c.id)}
-                onBlur={() => setHover(null)}
-                aria-label={`${c.name} สถานะ ${st}`}
+                onFocus={() => openCard(c.id)}
+                onBlur={blurCard}
+                aria-label={`${c.name} ${st ? `สถานะ ${st}` : 'ไม่มีเซนเซอร์'}`}
               >
                 {st === 'critical' && <span className="pin__ring" />}
                 <svg className="pin__shape" viewBox="0 0 32 42" aria-hidden="true">
                   <path d="M16 40 C16 40 3 25.5 3 15 A13 13 0 0 1 29 15 C29 25.5 16 40 16 40 Z" />
                 </svg>
-                <span className="pin__glyph">
-                  <StatusGlyph status={st} size={14} />
-                </span>
+                <span className="pin__glyph">{st ? <StatusGlyph status={st} size={14} /> : <span className="nosensor-dot" />}</span>
               </button>
               <span className="pin__label">{c.name}</span>
               {hover === c.id && (
-                <div className="hovercard" role="tooltip">
+                <div
+                  className={`hovercard${c.inventory.tourUrl ? ' hovercard--tour' : ''}`}
+                  role="group"
+                  aria-label={`ข้อมูล${c.name}`}
+                  onFocus={() => openCard(c.id)}
+                  onBlur={blurCard}
+                  // กันไม่ให้ลาก/เลื่อนบนการ์ดไปขยับแผนที่
+                  onMouseDown={stop}
+                  onTouchStart={stop}
+                  onWheel={stop}
+                  onDoubleClick={stop}
+                >
                   <div className="hovercard__head">
                     <strong>{c.name}</strong>
-                    <StatusBadge status={st} compact />
+                    {st ? <StatusBadge status={st} compact /> : <NoSensorBadge compact />}
                   </div>
                   <div className="muted">
-                    {c.province} · สุขภาพ <span className="num">{healthByCave[c.id] ?? '—'}</span>/100
+                    {c.province}
+                    {c.hasSensors && (
+                      <>
+                        {' · สุขภาพ '}
+                        <span className="num">{healthByCave[c.id] ?? '—'}</span>/100
+                      </>
+                    )}
                   </div>
-                  <ul className="hovercard__list">
-                    {SENSOR_KEYS.map((k) => {
-                      const l = rows.find((r) => r.sensor === k);
-                      return (
-                        <li key={k}>
-                          <StatusGlyph status={l?.status ?? 'offline'} size={8} pulse={false} />
-                          <span>{SENSORS[k].short}</span>
-                          <span className="num">
-                            {fmtValue(k, l?.value)} {SENSORS[k].unit}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <div className="hovercard__hint">คลิกเพื่อซูมเข้า</div>
+                  {!c.hasSensors && <InventorySummary cave={c} compact />}
+                  {c.hasSensors && (
+                    <ul className="hovercard__list">
+                      {SENSOR_KEYS.map((k) => {
+                        const l = rows.find((r) => r.sensor === k);
+                        return (
+                          <li key={k}>
+                            <StatusGlyph status={l?.status ?? 'offline'} size={8} pulse={false} />
+                            <span>{SENSORS[k].short}</span>
+                            <span className="num">
+                              {fmtValue(k, l?.value)} {SENSORS[k].unit}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                  {c.inventory.tourUrl && (
+                    <div className="hovercard__tour">
+                      <div className="overline">Virtual 3D Tour</div>
+                      <iframe
+                        src={c.inventory.tourUrl}
+                        title={`Virtual 3D tour ${c.name}`}
+                        loading="lazy"
+                        allow="fullscreen; xr-spatial-tracking"
+                        allowFullScreen
+                      />
+                      <a href={c.inventory.tourUrl} target="_blank" rel="noopener noreferrer" className="hovercard__tourlink">
+                        เปิดทัวร์เต็มจอ ↗
+                      </a>
+                    </div>
+                  )}
+                  <div className="hovercard__hint">คลิกหมุดเพื่อซูมเข้า</div>
                 </div>
               )}
             </div>

@@ -13,11 +13,22 @@ interface UiState {
   ack: (alertId: string) => void;
 }
 
-const safeStorage = createJSONStorage(() => {
+/** localStorage ที่ไม่ทำให้แอปพังเมื่ออ่าน/เขียนไม่ได้ (private mode, พื้นที่เต็ม) */
+export const safeStorage = createJSONStorage(() => {
   try {
     const s = window.localStorage;
     s.getItem('probe');
-    return s;
+    return {
+      getItem: (k: string) => s.getItem(k),
+      setItem: (k: string, v: string) => {
+        try {
+          s.setItem(k, v);
+        } catch (err) {
+          console.warn('บันทึกลง localStorage ไม่สำเร็จ', err);
+        }
+      },
+      removeItem: (k: string) => s.removeItem(k),
+    };
   } catch {
     const mem = new Map<string, string>();
     return {

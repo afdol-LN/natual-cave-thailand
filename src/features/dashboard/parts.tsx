@@ -30,32 +30,3 @@ export function RiskPips({ level }: { level: RiskLevel }) {
     </svg>
   );
 }
-
-/** เกจครึ่งวงกลม 0–100 */
-export function Gauge({ value, label }: { value: number | null; label: string }) {
-  const v = Math.max(0, Math.min(100, value ?? 0));
-  const R = 80;
-  const cx = 100;
-  const cy = 96;
-  const angle = Math.PI * (1 - v / 100);
-  const x = cx + R * Math.cos(angle);
-  const y = cy - R * Math.sin(angle);
-  const large = 0;
-  const ticks = [0, 25, 50, 75, 100];
-  return (
-    <svg viewBox="0 0 200 120" className="gauge" role="img" aria-label={`${label} ${value ?? '—'} จาก 100`}>
-      <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 0 1 ${cx + R} ${cy}`} fill="none" stroke={C.line} strokeWidth={14} strokeLinecap="round" />
-      {value != null && v > 0 && <path d={`M ${cx - R} ${cy} A ${R} ${R} 0 ${large} 1 ${x} ${y}`} fill="none" stroke={C.accent} strokeWidth={14} strokeLinecap="round" />}
-      {ticks.map((t) => {
-        const a = Math.PI * (1 - t / 100);
-        return <line key={t} x1={cx + (R - 12) * Math.cos(a)} y1={cy - (R - 12) * Math.sin(a)} x2={cx + (R - 18) * Math.cos(a)} y2={cy - (R - 18) * Math.sin(a)} stroke={C.faint} strokeWidth={1.5} />;
-      })}
-      <text x={cx} y={cy - 12} textAnchor="middle" className="gauge__value">
-        {value ?? '—'}
-      </text>
-      <text x={cx} y={cy + 14} textAnchor="middle" className="gauge__label">
-        {label}
-      </text>
-    </svg>
-  );
-}

@@ -17,6 +17,11 @@
   /* สีเน้น: ปุ่ม, แท็บ active, สถานะ, กราฟ, หมุด */
   --c-accent: var(--c-green);
 
+  /* สีประจำถ้ำ (ใช้ใน radar เทียบถ้ำ) */
+  --c-cave-trg: #3BA7E5; /* ถ้ำเขาช้างหาย: ฟ้า */
+  --c-cave-kri: #F28C28; /* ถ้ำละว้า: ส้ม */
+  --c-cave-cnx: #B79CE0; /* ถ้ำเชียงดาว: ม่วงอ่อน */
+
   /* เฉดที่ derive จากพาเลตต์ (ห้ามเพิ่ม hex) */
   --c-text-muted: color-mix(in srgb, var(--c-text) 72%, var(--c-bg));
   --c-text-faint: color-mix(in srgb, var(--c-text) 45%, var(--c-bg));

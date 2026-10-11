@@ -8,7 +8,10 @@ Prototype ของ **National Smart Cave Platform** ศูนย์เฝ้า
 | ภาพรวม | `/` | ลูกโลก 3D (Mapbox) ปักหมุด 3 ถ้ำ, ภูมิประเทศ 3D เฉพาะไทย, เข็มทิศ, KPI ประเทศ, feed alert, แผงซ้าย/ขวาพับได้ |
 | เซนเซอร์ | `/sensors/:caveId` | การ์ด 5 เซนเซอร์ (ค่าสด + sparkline), กราฟใหญ่พร้อมเส้นเกณฑ์ + ดาวน์โหลด CSV, ตารางสถานะอุปกรณ์ |
 | Dashboard | `/dashboard/all` | เทียบ 3 ถ้ำ: KPI, กราฟเทียบ, อันดับความเปราะบาง, เหตุการณ์ผิดปกติรายวัน |
-| | `/dashboard/:caveId?view=` | รายถ้ำ แบ่งหมวด: `all` รวมทุกหมวด · (ไม่ระบุ) สถิติ · `bio` ความหลากหลายทางชีวภาพ · `geo` ภูมิศาสตร์และธรณีวิทยา |
+| | `/dashboard/:caveId?view=` | รายถ้ำ แบ่งหมวด: `all` รวมทุกหมวด · (ไม่ระบุ) สถิติ · `bio` ความหลากหลายทางชีวภาพ · `info` ข้อมูลถ้ำ (ทะเบียน) |
+| ทะเบียน · ถ้ำ | `/registry`, `/registry/new`, `/registry/:caveId/edit` | ตารางถ้ำทั้งหมด ค้นหาและกรอง, เพิ่ม แก้ไข ลบ, ส่งออก JSON / CSV, ฟอร์มเติมภาค จังหวัด อำเภอจากพิกัด, อัปโหลดรูปแผนที่ถ้ำ |
+| ทะเบียน · ชนิดพันธุ์ | `/registry/species`, `/registry/species/:id`, `…/new`, `…/:id/edit` | ตารางชนิดพันธุ์, โปรไฟล์ (อนุกรมวิธาน, IUCN, สัตว์ถ้ำแท้, การแพร่กระจาย, กราฟประชากร, ตัวอย่างอ้างอิง, DNA), ฟอร์มเพิ่ม/แก้ไข |
+| บันทึกการพบ | `/registry/occurrence/new?cave=&species=`, `/registry/occurrence/:id/edit` | การพบชนิดพันธุ์ในแต่ละถ้ำ: แหล่งที่อยู่, ความชุกชุม, ผลนับประชากร, ตัวอย่างอ้างอิง |
 
 ## วิธีรัน
 
@@ -140,7 +143,7 @@ sequenceDiagram
 |---|---|
 | `index.ts` | **ประตูเดียวของข้อมูล** ฟังก์ชัน `getCaves`, `getLatest`, `getSeries`, `getDevices`, `getAlerts`, `getSpecies`, `getAnalytics`, `getDailyAnomalies`, `getForecast` คืน Promise เหมือนเรียก API จริง; แคช alert ไว้ 1 นาที |
 | `simulator.ts` | สร้างค่าเซนเซอร์แบบ deterministic จาก (ถ้ำ, เซนเซอร์, เวลา, เวลาเริ่มแอป): ค่าพื้นฐาน + วงจรรายวัน + noise ต่อเนื่อง + เหตุการณ์ย้อนหลัง + เหตุการณ์สคริปต์; สร้างอนุกรมเวลา, ค่าล่าสุด, สถานะอุปกรณ์, และสแกน alert ย้อนหลัง 7 วัน |
-| `analytics.ts` | คำนวณผลเชิงตัดสินใจ: ดัชนีสุขภาพ 0–100, ดัชนีความเปราะบาง (exposure / sensitivity / adaptive capacity), Climate Refugia, พยากรณ์ 2026–2060 ตาม 3 scenario, ความเสี่ยงชนิดพันธุ์, จำนวนเหตุการณ์รายวัน |
+| `analytics.ts` | คำนวณผลเชิงตัดสินใจ: ดัชนีสุขภาพ 0–100, ดัชนี 7 มิติ 0–1 (`caveIndices`), ดัชนีความเปราะบาง (exposure / sensitivity / adaptive capacity), Climate Refugia, พยากรณ์ 2026–2060 ตาม 3 scenario, ความเสี่ยงชนิดพันธุ์, จำนวนเหตุการณ์รายวัน |
 
 ### `src/hooks/queries.ts` — ดึงข้อมูลเข้า React
 
@@ -168,9 +171,10 @@ sequenceDiagram
 | `overview/GlobeMap.tsx` | ลูกโลก Mapbox (style `standard`, projection globe): intro บินเข้าไทย, หมุดหยดน้ำตามสถานะ + hovercard, คลิกแล้วบินเข้าถ้ำ (ซูม 13.5 เอียง 65°), terrain 3D + hillshade เฉพาะกรอบไทยและเปิดเมื่อซูม ≥ 6 (`addTerrain`), เข็มทิศลอยมุมซ้ายล่าง (`Compass`) |
 | `sensors/SensorsPage.tsx` | หน้าเซนเซอร์: การ์ด 5 ใบ (ไอคอน, ค่าสด, `RangeBar`, sparkline, แบตเตอรี่), กราฟใหญ่ (`SensorChart`) พร้อมแถบช่วงปกติ เส้นเกณฑ์ และจุดผิดปกติ + ดาวน์โหลด CSV, ตารางอุปกรณ์ |
 | `dashboard/DashboardPage.tsx` | โครงหน้า Dashboard: แถบเลือกถ้ำที่ขยายแถวหมวดหมู่ลงมาเมื่อเลือกถ้ำ; เก็บหมวดใน `?view=` |
-| `dashboard/AllView.tsx` | มุมมองรวม 3 ถ้ำ: KPI, กราฟเทียบตัวแปร, ตารางอันดับความเปราะบาง, กราฟแท่งเหตุการณ์ผิดปกติ 7 วัน |
-| `dashboard/CaveView.tsx` | มุมมองรายถ้ำ แบ่ง 4 แท็บ (`CAVE_TABS`): `StatsView` (เกจสุขภาพ, พยากรณ์, เรดาร์, ไทม์ไลน์ alert + ปุ่มรับทราบ), `BioView` (สรุปชนิดพันธุ์, ความเสี่ยง, ตาราง), `GeoView` (ตัวเลขสำคัญ + การ์ดข้อมูลพื้นที่), และหน้ารวมทุกหมวด |
-| `dashboard/parts.tsx` | ชิ้นส่วนเฉพาะ Dashboard: `Gauge` (เกจครึ่งวงกลม), `RefugiaTag`, `RiskPips` |
+| `dashboard/AllView.tsx` | มุมมองรวม 3 ถ้ำ: KPI, spider chart 7 มิติซ้อน 3 ถ้ำ + ตารางค่าดัชนี, กราฟเทียบตัวแปร, ตารางอันดับความเปราะบาง, กราฟแท่งเหตุการณ์ผิดปกติ 7 วัน |
+| `dashboard/CaveView.tsx` | มุมมองรายถ้ำ แบ่ง 4 แท็บ (`CAVE_TABS`): `StatsView` (CHI + spider chart 7 มิติ, พยากรณ์, เรดาร์, ไทม์ไลน์ alert + ปุ่มรับทราบ), `BioView` (สรุปชนิดพันธุ์, ความเสี่ยง, ตาราง), `GeoView` (ตัวเลขสำคัญ + การ์ดข้อมูลพื้นที่), และหน้ารวมทุกหมวด |
+| `dashboard/IndexRadar.tsx` | Spider chart ดัชนี 7 มิติ (`IndexRadar`, ซ้อนหลายถ้ำได้), `IndexTable`, `CaveLegend`, สีประจำถ้ำ `CAVE_COLOR` |
+| `dashboard/parts.tsx` | ชิ้นส่วนเฉพาะ Dashboard: `RefugiaTag`, `RiskPips` |
 
 ### อื่น ๆ
 
@@ -191,6 +195,7 @@ sequenceDiagram
 | `#092328` | ตัวอักษร (`--c-text`) |
 | `#2A835F` | สีเน้น (`--c-accent`): ปุ่ม, แท็บ active, สถานะ, กราฟ, หมุด, เข็มทิศ |
 | `#2A835F` ผสมขาว | พื้นผิว card 8% / 16% และเส้นขอบ 35% ด้วย `color-mix()` |
+| `#3BA7E5` / `#F28C28` / `#B79CE0` | สีประจำถ้ำใน spider chart: เขาช้างหาย ฟ้า / ละว้า ส้ม / เชียงดาว ม่วงอ่อน |
 
 ฟอนต์: DM Sans (ข้อความ), JetBrains Mono (ตัวเลข), Noto Sans Thai (fallback ภาษาไทย)
 
@@ -206,6 +211,38 @@ sequenceDiagram
 กราฟแยก series ด้วยรูปแบบเส้น (ทึบ / เส้นประ / จุด) + เครื่องหมาย (วงกลม / สี่เหลี่ยม / ข้าวหลามตัด) และกราฟแท่งใช้ลวดลาย (ทึบ / ลายเฉียง / จุด)
 
 **ข้อยกเว้น:** ลูกโลกและแผนที่ใช้ธีม default ของ Mapbox (`mapbox://styles/mapbox/standard`) ไม่ได้ปรับสีให้เข้าพาเลตต์ ส่วนหมุด เข็มทิศ และแผงบนแผนที่ใช้ tokens
+
+## ดัชนีถ้ำ 7 มิติ (spider chart)
+
+ทุกดัชนี normalize เป็น 0–1 แสดงใน Dashboard (รายถ้ำและเทียบ 3 ถ้ำ)
+
+| ดัชนี | ความหมาย | ที่มา |
+|---|---|---|
+| **CHI** Cave Health Index | สุขภาพถ้ำ | คำนวณสดจากเซนเซอร์ทั้ง 5 ตัว (`healthIndex` ÷ 100) |
+| **CVI** Climate Vulnerability Index | ความเปราะบางต่อภูมิอากาศ (สูง = แย่) | mock: ค่าเฉลี่ย exposure, sensitivity, 1 − adaptive capacity |
+| **CBI** Climate Buffering Index | ความสามารถบัฟเฟอร์ภูมิอากาศ | mock: ค่าคงที่ใน `config/caves.ts` |
+| **ESI** Ecosystem Stability Index | เสถียรภาพระบบนิเวศ | mock: ค่าคงที่ใน `config/caves.ts` |
+| **BII** Biodiversity Integrity Index | ความสมบูรณ์ความหลากหลายทางชีวภาพ | mock: ค่าคงที่ใน `config/caves.ts` |
+| **SVA** Species Vulnerability Assessment | ความเปราะบางของชนิดพันธุ์ (สูง = แย่) | mock: ค่าเฉลี่ยคะแนนความเสี่ยงชนิดพันธุ์ |
+| **CRA** Climate Refugia Assessment | ศักยภาพเป็นพื้นที่หลบภัยภูมิอากาศ | mock: 0.5 × (1 − CVI) + 0.5 × CBI |
+
+## ทะเบียนถ้ำแห่งชาติ (National Cave Inventory)
+
+- ถ้ำตั้งต้น 3 ถ้ำ (มีเซนเซอร์) อยู่ใน `src/config/caves.ts` ส่วนถ้ำที่ผู้ใช้เพิ่มและการแก้ไขถ้ำตั้งต้น เก็บใน **localStorage** (key `smart-cave-registry`) ผ่าน `src/registry.ts`
+- ถ้ำที่เพิ่มใหม่ขึ้นทั้งระบบ (หมุดสีเทา, แถบเลือกถ้ำ, แท็บข้อมูลถ้ำ) แต่ **ไม่มีเซนเซอร์** ถ้ำตั้งต้นแก้ไขและคืนค่าเดิมได้ แต่ลบไม่ได้
+- พิมพ์ละติจูด / ลองจิจูดแล้ว `src/domain/geo.ts` หาอำเภอด้วย point-in-polygon กับ `public/geo/th-districts.json` (โหลดเฉพาะตอนเปิดฟอร์ม) ภาคใช้การแบ่ง 6 ภาคใน `src/config/regions.ts`
+- ตัวเลือก dropdown ทั้งหมดแก้ได้ที่ `src/config/inventory-options.ts`
+- รูปแผนที่ถ้ำ: `POST /api/upload` (plugin `vite-upload-plugin.ts`) บันทึกที่ `public/uploads/cave-maps/` แล้วเก็บแค่ชื่อไฟล์ใน localStorage **ใช้ได้เฉพาะตอนรัน `npm run dev`** บน static hosting อัปโหลดไม่ได้
+
+## ฐานข้อมูลความหลากหลายทางชีวภาพของถ้ำ (Cave Biodiversity Database)
+
+- ข้อมูล 2 ระดับ: **ชนิดพันธุ์** (อนุกรมวิธาน, IUCN, สถานภาพสัตว์ถ้ำ, เฉพาะถิ่น, กลุ่มหน้าที่, ความไวต่อเซนเซอร์, DNA, รูป) และ **การพบในแต่ละถ้ำ** (แหล่งที่อยู่, ความชุกชุม, ประชากร, ตัวอย่างอ้างอิง) การแพร่กระจายคำนวณจากการพบ
+- ข้อมูลตั้งต้น 10 ชนิด / 12 การพบ อยู่ใน `src/config/species.ts` (ชื่อสมมติ, accession `MOCK-` ไม่ลิงก์ภายนอก) การเพิ่ม/แก้เก็บใน localStorage key `smart-cave-biodiversity` ผ่าน `src/biodb.ts`
+- ระเบียนตั้งต้นแก้ไข/คืนค่าเดิมได้แต่ลบไม่ได้ · ลบชนิดพันธุ์หรือถ้ำที่เพิ่ม → การพบที่เกี่ยวข้องถูกลบตาม · คู่ถ้ำ-ชนิดพันธุ์ซ้ำไม่ได้
+- ความเสี่ยงชนิดพันธุ์และดัชนี SVA ใช้ข้อมูลจากทะเบียนนี้ (`api/` อ่านผ่าน `getBioSnapshot()`)
+- รูปชนิดพันธุ์อัปโหลดลง `public/uploads/species/` (`POST /api/upload?kind=species`)
+
+**ข้อมูลขอบเขตการปกครอง:** UN OCHA COD-AB Thailand (กรมแผนที่ทหาร 2019, [CC BY-IGO](https://creativecommons.org/licenses/by/3.0/igo/)) ฉบับย่อขนาดจาก [piyayut-ch/mapthai](https://github.com/piyayut-ch/mapthai) (MIT) สร้างไฟล์ใหม่ได้ด้วย `node scripts/build-admin.mjs <th_adm2.geojson>`
 
 ## ข้อมูลจำลอง
 

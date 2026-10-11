@@ -3,7 +3,7 @@
  * ไม่มี Math.random → ผลลัพธ์ deterministic ทดสอบได้
  * เวลาเริ่มจำลอง (start) ใช้เป็นจุดยึดของเหตุการณ์ที่เขียนสคริปต์ไว้ให้เห็น alert ตอนเปิดแอป
  */
-import { CAVES, getCaveConfig } from '../config/caves';
+import { SENSOR_CAVES, getSensorCave } from '../config/caves';
 import { SENSOR_KEYS, SENSORS } from '../config/sensors';
 import { severity, statusOf } from '../domain/status';
 import type { CaveAlert, CaveId, Device, Latest, RangeKey, Reading, SensorKey, Status } from '../domain/types';
@@ -102,7 +102,7 @@ function offlineSince(caveId: CaveId, sensor: SensorKey, start: number): number 
 function historicalDelta(caveId: CaveId, sensor: SensorKey, t: number, start: number): number {
   const key = hashStr(`${caveId}|${sensor}|hist`);
   const def = SENSORS[sensor];
-  const base = getCaveConfig(caveId).baseline[sensor];
+  const base = getSensorCave(caveId).baseline[sensor];
   const dir = WORSE_DIR[sensor];
   const day = Math.floor(t / DAY);
   let total = 0;
@@ -145,7 +145,7 @@ export function valueAt(caveId: CaveId, sensor: SensorKey, t: number, start: num
   const off = offlineSince(caveId, sensor, start);
   if (off != null && t >= off) return null;
 
-  const base = getCaveConfig(caveId).baseline[sensor];
+  const base = getSensorCave(caveId).baseline[sensor];
   const a = AMP[sensor];
   const key = hashStr(`${caveId}|${sensor}`);
   const localHour = ((t / HOUR + 7) % 24 + 24) % 24; // UTC+7
@@ -193,7 +193,7 @@ export function latest(caveId: CaveId, sensor: SensorKey, now: number, start: nu
 }
 
 export function allLatest(now: number, start: number): Latest[] {
-  return CAVES.flatMap((c) => SENSOR_KEYS.map((s) => latest(c.id, s, now, start)));
+  return SENSOR_CAVES.flatMap((c) => SENSOR_KEYS.map((s) => latest(c.id, s, now, start)));
 }
 
 const MODELS: Record<SensorKey, string> = {
@@ -205,7 +205,7 @@ const MODELS: Record<SensorKey, string> = {
 };
 
 export function devices(now: number, start: number): Device[] {
-  return CAVES.flatMap((c) =>
+  return SENSOR_CAVES.flatMap((c) =>
     SENSOR_KEYS.map((s) => {
       const k = hashStr(`${c.id}|${s}|dev`);
       const isOff = offlineSince(c.id, s, start) != null;
@@ -242,7 +242,7 @@ function alertMessage(sensor: SensorKey, level: Exclude<Status, 'normal'>, peak:
 export function alerts(now: number, start: number): CaveAlert[] {
   const end = Math.floor(now / ALERT_STEP) * ALERT_STEP;
   const out: CaveAlert[] = [];
-  for (const c of CAVES) {
+  for (const c of SENSOR_CAVES) {
     for (const s of SENSOR_KEYS) {
       let cur: { start: number; level: Exclude<Status, 'normal'>; peak: number | null } | null = null;
       const flush = (endTs: number | null) => {

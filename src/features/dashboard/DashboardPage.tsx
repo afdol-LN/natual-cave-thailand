@@ -1,9 +1,10 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CAVES } from '../../config/caves';
+import { SENSOR_CAVES } from '../../config/caves';
 import { worstStatus } from '../../domain/status';
 import type { CaveId, Status } from '../../domain/types';
 import { useLatest } from '../../hooks/queries';
+import { useCave } from '../../registry';
 import { CaveSwitcher, Loading, useCaveRoute } from '../../shared/ui';
 import AllView from './AllView';
 import CaveView, { CAVE_TABS, isCaveTab, type CaveTab } from './CaveView';
@@ -11,13 +12,16 @@ import CaveView, { CAVE_TABS, isCaveTab, type CaveTab } from './CaveView';
 export default function DashboardPage() {
   const [route, select] = useCaveRoute('/dashboard', true);
   const [params, setParams] = useSearchParams();
-  const view = params.get('view');
+  // ?view=geo (แท็บเดิม) → แท็บข้อมูลถ้ำ
+  const raw = params.get('view');
+  const view = raw === 'geo' ? 'info' : raw;
   const tab: CaveTab = isCaveTab(view) ? view : 'stats';
   const setTab = (t: CaveTab) => setParams(t === 'stats' ? {} : { view: t }, { replace: true });
   const { data: latest } = useLatest();
+  const cave = useCave(route === 'all' ? null : route);
   const statuses = useMemo(() => {
     const m: Partial<Record<CaveId, Status>> = {};
-    for (const c of CAVES) m[c.id] = worstStatus((latest ?? []).filter((l) => l.caveId === c.id).map((l) => l.status));
+    for (const c of SENSOR_CAVES) m[c.id] = worstStatus((latest ?? []).filter((l) => l.caveId === c.id).map((l) => l.status));
     return m;
   }, [latest]);
 
@@ -27,7 +31,7 @@ export default function DashboardPage() {
       <div className="page__head">
         <div>
           <div className="overline">Decision Support Dashboard</div>
-          <h1 className="page__title">{route === 'all' ? 'ภาพรวมทั้งหมด' : CAVES.find((c) => c.id === route)!.name}</h1>
+          <h1 className="page__title">{route === 'all' ? 'ภาพรวมทั้งหมด' : cave?.name}</h1>
           <p className="muted">ข้อมูลจำลอง (mock) · ใช้สาธิตการติดตามภูมิอากาศและการตัดสินใจเชิงอนุรักษ์</p>
         </div>
       </div>

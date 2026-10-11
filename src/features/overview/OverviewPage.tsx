@@ -1,18 +1,26 @@
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CAVES, getCaveConfig } from '../../config/caves';
+import { SENSOR_CAVES } from '../../config/caves';
 import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
 import { fmtAgo, fmtNum } from '../../domain/format';
 import { worstStatus } from '../../domain/status';
-import type { CaveId, Latest, Status } from '../../domain/types';
+import type { CaveId, CaveRecord, Latest, Status } from '../../domain/types';
 import { useAlerts, useAnalytics, useLatest } from '../../hooks/queries';
-import { Kpi, Loading, Panel, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
+import { useCave, useCaveList, useCaveName } from '../../registry';
+import { Kpi, Loading, NoSensorBadge, Panel, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
 import { useUi } from '../../store';
+import InventorySummary from '../registry/InventorySummary';
 
 const GlobeMap = lazy(() => import('./GlobeMap'));
 const TOKEN = (import.meta.env.VITE_MAPBOX_TOKEN as string | undefined)?.trim() ?? '';
 
+/** สถานะรวมของถ้ำที่มีเซนเซอร์ (ถ้ำไม่มีเซนเซอร์ = ไม่มีค่า) */
+export type StatusMap = Partial<Record<CaveId, Status>>;
+export type HealthMap = Partial<Record<CaveId, number>>;
+
 export default function OverviewPage() {
+  const caves = useCaveList();
+  const caveName = useCaveName();
   const { data: latest } = useLatest();
   const { data: alerts } = useAlerts();
   const { data: analytics } = useAnalytics();
@@ -26,11 +34,11 @@ export default function OverviewPage() {
   const [rightOpen, setRightOpen] = useState(true);
 
   const statusByCave = useMemo(() => {
-    const m = {} as Record<CaveId, Status>;
-    for (const c of CAVES) m[c.id] = worstStatus((latest ?? []).filter((l) => l.caveId === c.id).map((l) => l.status));
+    const m: StatusMap = {};
+    for (const c of SENSOR_CAVES) m[c.id] = worstStatus((latest ?? []).filter((l) => l.caveId === c.id).map((l) => l.status));
     return m;
   }, [latest]);
-  const healthByCave = useMemo(() => Object.fromEntries((analytics ?? []).map((a) => [a.caveId, a.health])) as Record<CaveId, number>, [analytics]);
+  const healthByCave = useMemo<HealthMap>(() => Object.fromEntries((analytics ?? []).map((a) => [a.caveId, a.health])), [analytics]);
 
   const select = (id: CaveId | null) => {
     setSelected(id);
@@ -45,8 +53,9 @@ export default function OverviewPage() {
     setResetKey((k) => k + 1);
   };
 
+  const sensorCaves = caves.filter((c) => c.hasSensors);
   const openAlerts = (alerts ?? []).filter((a) => a.end == null && !acked[a.id]);
-  const onlineCaves = CAVES.filter((c) => statusByCave[c.id] !== 'offline').length;
+  const onlineCaves = sensorCaves.filter((c) => statusByCave[c.id] && statusByCave[c.id] !== 'offline').length;
   const activeSensors = (latest ?? []).filter((l) => l.status !== 'offline').length;
   const avgHealth = analytics?.length ? analytics.reduce((s, a) => s + a.health, 0) / analytics.length : null;
   const showMap = TOKEN && !mapFailed;
@@ -58,6 +67,7 @@ export default function OverviewPage() {
           <Suspense fallback={<Loading label="กำลังโหลดโลก 3D…" />}>
             <GlobeMap
               token={TOKEN}
+              caves={caves}
               statusByCave={statusByCave}
               healthByCave={healthByCave}
               latest={latest ?? []}
@@ -72,7 +82,7 @@ export default function OverviewPage() {
           </button>
         </div>
       ) : (
-        <NoMapFallback failed={mapFailed} statusByCave={statusByCave} healthByCave={healthByCave} selected={selected} onSelect={select} />
+        <NoMapFallback failed={mapFailed} caves={caves} statusByCave={statusByCave} healthByCave={healthByCave} selected={selected} onSelect={select} />
       )}
 
       <div className={`overview__panels${sheetOpen ? ' is-open' : ''}${leftOpen ? '' : ' left-closed'}${rightOpen ? '' : ' right-closed'}`}>
@@ -85,16 +95,16 @@ export default function OverviewPage() {
         <div className="overview__left">
           <Panel overline="National Smart Cave Platform" title="สถานะทั่วประเทศ">
             <div className="kpi-grid kpi-grid--2">
-              <Kpi label="ถ้ำออนไลน์" value={`${onlineCaves}/${CAVES.length}`} />
-              <Kpi label="เซนเซอร์ใช้งาน" value={`${activeSensors}/${CAVES.length * SENSOR_KEYS.length}`} />
+              <Kpi label="ถ้ำออนไลน์" value={`${onlineCaves}/${sensorCaves.length}`} sub={`ในฐานข้อมูล ${caves.length} ถ้ำ`} />
+              <Kpi label="เซนเซอร์ใช้งาน" value={`${activeSensors}/${sensorCaves.length * SENSOR_KEYS.length}`} />
               <Kpi label="Alert ที่เปิดอยู่" value={openAlerts.length} status={openAlerts.some((a) => a.level === 'critical') ? 'critical' : undefined} />
-              <Kpi label="ดัชนีสุขภาพเฉลี่ย" value={fmtNum(avgHealth)} unit="/100" />
+              <Kpi label="Cave Health Index (CHI)" value={fmtNum(avgHealth)} unit="/100" />
             </div>
             <ul className="cave-mini">
-              {CAVES.map((c) => (
+              {caves.map((c) => (
                 <li key={c.id}>
                   <button className={`cave-mini__btn${selected === c.id ? ' is-active' : ''}`} onClick={() => select(c.id)}>
-                    <StatusGlyph status={statusByCave[c.id]} />
+                    {statusByCave[c.id] ? <StatusGlyph status={statusByCave[c.id]!} /> : <span className="nosensor-dot" title="ไม่มีเซนเซอร์" />}
                     <span className="cave-mini__name">{c.name}</span>
                     <span className="cave-mini__prov">{c.province}</span>
                     <span className="num cave-mini__health">{healthByCave[c.id] ?? '—'}</span>
@@ -102,6 +112,9 @@ export default function OverviewPage() {
                 </li>
               ))}
             </ul>
+            <Link to="/registry" className="btn btn--pill btn--sm btn--block">
+              ฐานข้อมูลถ้ำทั้งหมด →
+            </Link>
           </Panel>
         </div>
         <div className="overview__right">
@@ -114,7 +127,7 @@ export default function OverviewPage() {
                   <StatusBadge status={a.level} compact />
                   <div className="alertitem__body">
                     <button className="alertitem__title linklike" onClick={() => select(a.caveId)}>
-                      {getCaveConfig(a.caveId).name} · {SENSORS[a.sensor].label}
+                      {caveName(a.caveId)} · {SENSORS[a.sensor].label}
                     </button>
                     <div className="alertitem__msg">{a.message}</div>
                     <div className="alertitem__time">
@@ -145,8 +158,9 @@ function SideToggle({ side, open, onToggle, label }: { side: 'left' | 'right'; o
   );
 }
 
-function CaveDetail({ id, latest, status, health, onClose }: { id: CaveId; latest: Latest[]; status: Status; health?: number; onClose: () => void }) {
-  const cave = getCaveConfig(id);
+function CaveDetail({ id, latest, status, health, onClose }: { id: CaveId; latest: Latest[]; status?: Status; health?: number; onClose: () => void }) {
+  const cave = useCave(id);
+  if (!cave) return null;
   const rows = latest.filter((l) => l.caveId === id);
   return (
     <Panel
@@ -160,35 +174,43 @@ function CaveDetail({ id, latest, status, health, onClose }: { id: CaveId; lates
       }
     >
       <div className="detail__meta">
-        <StatusBadge status={status} />
-        <span className="muted">
-          สุขภาพ <span className="num">{health ?? '—'}</span>/100
-        </span>
+        {status ? <StatusBadge status={status} /> : <NoSensorBadge />}
+        {cave.hasSensors && (
+          <span className="muted">
+            สุขภาพ <span className="num">{health ?? '—'}</span>/100
+          </span>
+        )}
       </div>
-      <dl className="readings">
-        {SENSOR_KEYS.map((k) => {
-          const l = rows.find((r) => r.sensor === k);
-          return (
-            <div key={k} className={`readings__row readings__row--${l?.status ?? 'offline'}`}>
-              <dt>
-                <StatusGlyph status={l?.status ?? 'offline'} size={10} /> {SENSORS[k].label}
-              </dt>
-              <dd>
-                <ValueText sensor={k} value={l?.value ?? null} />
-              </dd>
-            </div>
-          );
-        })}
-      </dl>
+      {cave.hasSensors ? (
+        <dl className="readings">
+          {SENSOR_KEYS.map((k) => {
+            const l = rows.find((r) => r.sensor === k);
+            return (
+              <div key={k} className={`readings__row readings__row--${l?.status ?? 'offline'}`}>
+                <dt>
+                  <StatusGlyph status={l?.status ?? 'offline'} size={10} /> {SENSORS[k].label}
+                </dt>
+                <dd>
+                  <ValueText sensor={k} value={l?.value ?? null} />
+                </dd>
+              </div>
+            );
+          })}
+        </dl>
+      ) : (
+        <InventorySummary cave={cave} />
+      )}
       <p className="detail__coords num">
         {cave.lat.toFixed(4)}°N, {cave.lon.toFixed(4)}°E {cave.coordsVerified ? '' : '· พิกัดยังไม่ยืนยัน'}
       </p>
       <div className="btn-row">
-        <Link className="btn btn--primary btn--pill" to={`/sensors/${id}`}>
-          ดูเซนเซอร์
-        </Link>
-        <Link className="btn btn--pill" to={`/dashboard/${id}`}>
-          เปิด Dashboard
+        {cave.hasSensors && (
+          <Link className="btn btn--primary btn--pill" to={`/sensors/${id}`}>
+            ดูเซนเซอร์
+          </Link>
+        )}
+        <Link className={`btn btn--pill${cave.hasSensors ? '' : ' btn--primary'}`} to={cave.hasSensors ? `/dashboard/${id}` : `/dashboard/${id}?view=info`}>
+          {cave.hasSensors ? 'เปิด Dashboard' : 'ดูข้อมูลถ้ำ'}
         </Link>
       </div>
     </Panel>
@@ -197,14 +219,16 @@ function CaveDetail({ id, latest, status, health, onClose }: { id: CaveId; lates
 
 function NoMapFallback({
   failed,
+  caves,
   statusByCave,
   healthByCave,
   selected,
   onSelect,
 }: {
   failed: boolean;
-  statusByCave: Record<CaveId, Status>;
-  healthByCave: Record<CaveId, number>;
+  caves: CaveRecord[];
+  statusByCave: StatusMap;
+  healthByCave: HealthMap;
   selected: CaveId | null;
   onSelect: (id: CaveId) => void;
 }) {
@@ -218,10 +242,10 @@ function NoMapFallback({
         </p>
       </div>
       <div className="nomap__grid">
-        {CAVES.map((c) => (
+        {caves.map((c) => (
           <button key={c.id} className={`cavecard${selected === c.id ? ' is-active' : ''}`} onClick={() => onSelect(c.id)}>
             <div className="cavecard__top">
-              <StatusBadge status={statusByCave[c.id]} />
+              {statusByCave[c.id] ? <StatusBadge status={statusByCave[c.id]!} /> : <NoSensorBadge />}
               <span className="num muted">{c.id}</span>
             </div>
             <div className="cavecard__name">{c.name}</div>

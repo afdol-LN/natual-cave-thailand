@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CAVES } from '../config/caves';
+import { SENSOR_CAVES } from '../config/caves';
 import { SENSOR_KEYS } from '../config/sensors';
 import { alerts, allLatest, devices, latest, series, valueAt } from './simulator';
 
@@ -8,7 +8,7 @@ const NOW = START + 30_000;
 
 describe('simulator: deterministic', () => {
   it('อินพุตเดียวกันได้ค่าเดียวกันเสมอ', () => {
-    for (const c of CAVES)
+    for (const c of SENSOR_CAVES)
       for (const s of SENSOR_KEYS) {
         const t = START - 5 * 3600_000 + 1234;
         expect(valueAt(c.id, s, t, START)).toBe(valueAt(c.id, s, t, START));

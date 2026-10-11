@@ -1,31 +1,32 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { IconType } from 'react-icons';
-import { LuChartLine, LuLayoutGrid, LuLeaf, LuMountain } from 'react-icons/lu';
-import { Area, CartesianGrid, ComposedChart, Line, PolarAngleAxis, PolarGrid, PolarRadiusAxis, Radar, RadarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { RISK_LABEL } from '../../api/analytics';
-import { getCaveConfig } from '../../config/caves';
+import { LuBookOpen, LuChartLine, LuLayoutGrid, LuLeaf, LuRadioTower } from 'react-icons/lu';
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { SENSOR_KEYS, SENSORS } from '../../config/sensors';
 import { fmtDateTime, fmtDuration, fmtValue } from '../../domain/format';
 import type { CaveId, Scenario, SensorKey } from '../../domain/types';
-import { useAlerts, useAnalytics, useForecast, useLatest, useSpecies } from '../../hooks/queries';
-import { C, Kpi, LegendSwatch, Loading, Panel, SERIES_DASH, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
+import { useAlerts, useAnalytics, useForecast, useLatest } from '../../hooks/queries';
+import { C, LegendSwatch, Loading, Panel, SERIES_DASH, StatusBadge, StatusGlyph, ValueText } from '../../shared/ui';
+import { useCave } from '../../registry';
 import { useUi } from '../../store';
-import { Gauge, RefugiaTag, RiskPips } from './parts';
+import CaveInfo from '../registry/CaveInfo';
+import { IndexRadar } from './IndexRadar';
+import { RefugiaTag } from './parts';
+import BioView from './BioView';
 
 const SCEN: { key: Scenario; label: string }[] = [
   { key: 'low', label: 'ต่ำ' },
   { key: 'mid', label: 'กลาง' },
   { key: 'high', label: 'สูง' },
 ];
-const ABUNDANCE = { rare: 'พบน้อย', common: 'พบทั่วไป', abundant: 'พบมาก' } as const;
 
-export type CaveTab = 'all' | 'stats' | 'bio' | 'geo';
+export type CaveTab = 'all' | 'stats' | 'bio' | 'info';
 export const CAVE_TABS: { key: CaveTab; label: string; icon: IconType }[] = [
   { key: 'all', label: 'รวมทุกหมวด', icon: LuLayoutGrid },
   { key: 'stats', label: 'สถิติ', icon: LuChartLine },
   { key: 'bio', label: 'ความหลากหลายทางชีวภาพ', icon: LuLeaf },
-  { key: 'geo', label: 'ภูมิศาสตร์และธรณีวิทยา', icon: LuMountain },
+  { key: 'info', label: 'ข้อมูลถ้ำ', icon: LuBookOpen },
 ];
 export const isCaveTab = (v: string | null): v is CaveTab => CAVE_TABS.some((t) => t.key === v);
 
@@ -43,9 +44,27 @@ export default function CaveView({ caveId, tab }: { caveId: CaveId; tab: CaveTab
         ))}
       </div>
     );
+  if (tab === 'info') return <CaveInfo caveId={caveId} />;
   if (tab === 'bio') return <BioView caveId={caveId} />;
-  if (tab === 'geo') return <GeoView caveId={caveId} />;
-  return <StatsView caveId={caveId} />;
+  return (
+    <SensorGate caveId={caveId}>
+      <StatsView caveId={caveId} />
+    </SensorGate>
+  );
+}
+
+/** ถ้ำที่ยังไม่มีเซนเซอร์ (เพิ่มจากทะเบียน) ไม่มีข้อมูลสถิติ */
+function SensorGate({ caveId, children }: { caveId: CaveId; children: ReactNode }) {
+  const cave = useCave(caveId);
+  if (!cave) return <Loading />;
+  if (cave.hasSensors) return <>{children}</>;
+  return (
+    <div className="empty-state">
+      <LuRadioTower size={36} aria-hidden="true" />
+      <h3>ถ้ำนี้ยังไม่มีเซนเซอร์</h3>
+      <p className="muted">ข้อมูลสถิติจะแสดงเมื่อติดตั้งเซนเซอร์แล้ว ดูข้อมูลฐานข้อมูลได้ที่แท็บ "ข้อมูลถ้ำ" และชนิดพันธุ์ที่แท็บ "ความหลากหลายทางชีวภาพ"</p>
+    </div>
+  );
 }
 
 function StatsView({ caveId }: { caveId: CaveId }) {
@@ -56,9 +75,17 @@ function StatsView({ caveId }: { caveId: CaveId }) {
   return (
     <div className="dash">
       <div className="dash__row">
-        <Panel overline="Health Index" title="ดัชนีสุขภาพถ้ำ" className="span-4">
-          <Gauge value={a?.health ?? null} label="จาก 100" />
-          <div className="center">{a && <RefugiaTag level={a.refugia.level} />}</div>
+        <Panel overline="Cave Indices · 0–1" title="ดัชนีถ้ำ 7 มิติ" className="span-4">
+          <div className="chi-head">
+            <div>
+              <div className="overline">Cave Health Index (CHI)</div>
+              <div className="chi-head__value num">{a ? a.indices.chi.toFixed(2) : '—'}</div>
+              <div className="muted small">คำนวณจากเซนเซอร์ทั้ง 5 ตัว</div>
+            </div>
+            {a && <RefugiaTag level={a.refugia.level} short />}
+          </div>
+          {a ? <IndexRadar series={[{ caveId, indices: a.indices }]} height={260} /> : <Loading />}
+          <p className="muted small center">CHI จากข้อมูลจริงของเซนเซอร์ · อีก 6 ดัชนีเป็นข้อมูลจำลอง</p>
           <dl className="readings readings--compact">
             {SENSOR_KEYS.map((k) => {
               const l = latest?.find((r) => r.sensor === k);
@@ -80,86 +107,10 @@ function StatsView({ caveId }: { caveId: CaveId }) {
         </Panel>
 
         <Forecast caveId={caveId} />
-
-        <Panel overline="Vulnerability" title="เรดาร์ความเปราะบาง" className="span-3">
-          {!a ? (
-            <Loading />
-          ) : (
-            <>
-              <div className="chart-box chart-box--radar">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart
-                    data={[
-                      { axis: 'การสัมผัส', v: a.vulnerability.exposure },
-                      { axis: 'ความอ่อนไหว', v: a.vulnerability.sensitivity },
-                      { axis: 'ขาดการปรับตัว', v: 1 - a.vulnerability.adaptiveCapacity },
-                    ]}
-                    outerRadius="68%"
-                  >
-                    <PolarGrid stroke={C.line} />
-                    <PolarAngleAxis dataKey="axis" tick={{ fill: C.muted, fontSize: 11 }} />
-                    <PolarRadiusAxis domain={[0, 1]} tick={false} axisLine={false} />
-                    <Radar dataKey="v" stroke={C.accent} strokeWidth={2} fill={C.accent} fillOpacity={0.22} isAnimationActive={false} dot={{ r: 3, fill: C.accent }} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="center muted">
-                ดัชนีรวม <span className="num strong">{a.vulnerability.index.toFixed(2)}</span>
-              </div>
-            </>
-          )}
-        </Panel>
       </div>
 
       <div className="dash__row">
         <AlertTimeline caveId={caveId} />
-      </div>
-    </div>
-  );
-}
-
-function BioView({ caveId }: { caveId: CaveId }) {
-  const { data } = useSpecies(caveId);
-  const total = data?.length;
-  const endemic = data?.filter((d) => d.species.endemic).length;
-  const rare = data?.filter((d) => d.occurrence.abundance === 'rare').length;
-  const { data: analytics } = useAnalytics();
-  const highRisk = analytics?.find((a) => a.caveId === caveId)?.speciesRisk.filter((r) => r.level === 'high').length;
-  return (
-    <div className="dash">
-      <div className="kpi-strip">
-        <Kpi label="ชนิดพันธุ์ที่พบ" value={total ?? '—'} unit="ชนิด" />
-        <Kpi label="ชนิดพันธุ์ถิ่นเดียว" value={endemic ?? '—'} unit="ชนิด" />
-        <Kpi label="พบน้อย" value={rare ?? '—'} unit="ชนิด" />
-        <Kpi label="ความเสี่ยงสูง" value={highRisk ?? '—'} unit="ชนิด" status={highRisk ? 'critical' : undefined} />
-      </div>
-      <div className="dash__row">
-        <SpeciesRiskPanel caveId={caveId} />
-        <SpeciesList caveId={caveId} className="span-6" />
-      </div>
-    </div>
-  );
-}
-
-function GeoView({ caveId }: { caveId: CaveId }) {
-  const cave = getCaveConfig(caveId);
-  return (
-    <div className="dash">
-      <div className="kpi-strip">
-        <Kpi label="ความสูง" value={cave.elevationM.toLocaleString('th-TH')} unit="ม. รทก." />
-        <Kpi label="ความยาวโถงสำรวจ" value={`~${cave.lengthM.toLocaleString('th-TH')}`} unit="ม." />
-        <Kpi label="ภูมิภาค" value={cave.region} sub={cave.province} />
-        <Kpi label="พิกัด" value={`${cave.lat.toFixed(4)}, ${cave.lon.toFixed(4)}`} sub={cave.coordsVerified ? 'ยืนยันแล้ว' : 'พิกัดยังไม่ยืนยัน'} />
-      </div>
-      <div className="info-grid info-grid--2">
-        <InfoCard title="ภูมิศาสตร์" body={cave.geography} extra={`${cave.region} · สูง ${cave.elevationM} ม. รทก.`} />
-        <InfoCard title="ธรณีวิทยา" body={cave.geology} extra={`ความยาวโถงสำรวจ ~${cave.lengthM.toLocaleString('th-TH')} ม.`} />
-        <InfoCard title="อุทกวิทยา" body={cave.hydrology} />
-        <InfoCard
-          title="บริบทเชิงพื้นที่"
-          body={cave.spatialContext}
-          extra={`${cave.lat.toFixed(4)}°N ${cave.lon.toFixed(4)}°E${cave.coordsVerified ? '' : ' (พิกัดยังไม่ยืนยัน)'}`}
-        />
       </div>
     </div>
   );
@@ -188,7 +139,7 @@ function Forecast({ caveId }: { caveId: CaveId }) {
     <Panel
       overline="Scenario Forecast 2026–2060"
       title={`พยากรณ์${def.label}`}
-      className="span-5"
+      className="span-8"
       actions={
         <div className="seg seg--small" role="radiogroup" aria-label="scenario">
           {SCEN.map((s) => (
@@ -252,39 +203,6 @@ function Forecast({ caveId }: { caveId: CaveId }) {
   );
 }
 
-function SpeciesRiskPanel({ caveId }: { caveId: CaveId }) {
-  const { data: analytics } = useAnalytics();
-  const risks = analytics?.find((a) => a.caveId === caveId)?.speciesRisk;
-  return (
-    <Panel overline="Species at Risk" title="ความเสี่ยงชนิดพันธุ์" className="span-6">
-      {!risks ? (
-        <Loading />
-      ) : (
-        <ul className="risklist">
-          {risks.map((r) => (
-            <li key={r.species.id} className={`risk risk--${r.level}`}>
-              <div className="risk__main">
-                <div className="risk__name">
-                  {r.species.name}
-                  {r.species.endemic && <span className="tag">ถิ่นเดียว</span>}
-                </div>
-                <div className="muted small">
-                  <i>{r.species.sciName}</i> · {r.species.group}
-                  {r.driver && ` · ปัจจัยหลัก: ${SENSORS[r.driver].label}`}
-                </div>
-              </div>
-              <div className="risk__level">
-                <RiskPips level={r.level} />
-                <span className={r.level === 'high' ? 'strong' : ''}>{RISK_LABEL[r.level]}</span>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
-  );
-}
-
 function AlertTimeline({ caveId }: { caveId: CaveId }) {
   const { data: alerts } = useAlerts(caveId);
   const acked = useUi((s) => s.acked);
@@ -328,57 +246,6 @@ function AlertTimeline({ caveId }: { caveId: CaveId }) {
           })}
         </ol>
       )}
-    </Panel>
-  );
-}
-
-function InfoCard({ title, body, extra }: { title: string; body: string; extra?: string }) {
-  return (
-    <div className="infocard">
-      <div className="overline">{title}</div>
-      <p>{body}</p>
-      {extra && <p className="muted small num">{extra}</p>}
-    </div>
-  );
-}
-
-function SpeciesList({ caveId, className }: { caveId: CaveId; className?: string }) {
-  const { data } = useSpecies(caveId);
-  return (
-    <Panel overline="Biodiversity (mock)" title="ชนิดพันธุ์ที่พบ" className={className}>
-      {!data ? (
-        <Loading />
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ชื่อ</th>
-                <th>ชื่อวิทยาศาสตร์</th>
-                <th>กลุ่ม</th>
-                <th>บริเวณที่พบ</th>
-                <th>ความชุกชุม</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map(({ species, occurrence }) => (
-                <tr key={species.id}>
-                  <td>
-                    {species.name} {species.endemic && <span className="tag">ถิ่นเดียว</span>}
-                  </td>
-                  <td>
-                    <i className="muted">{species.sciName}</i>
-                  </td>
-                  <td>{species.group}</td>
-                  <td>{occurrence.zone}</td>
-                  <td>{ABUNDANCE[occurrence.abundance]}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="muted small">ชื่อชนิดพันธุ์เป็นชื่อสมมติสำหรับ prototype ไม่ใช่ผลสำรวจจริง</p>
     </Panel>
   );
 }

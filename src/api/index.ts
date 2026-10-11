@@ -2,9 +2,9 @@
  * ชั้นข้อมูล: UI เรียกผ่าน hooks/queries.ts → ไฟล์นี้เท่านั้น
  * ต่อ API จริงได้โดยแก้เฉพาะโฟลเดอร์ api/ (ลายเซ็นฟังก์ชันคงเดิม)
  */
-import { CAVES } from '../config/caves';
-import { OCCURRENCES, SPECIES } from '../config/species';
-import type { Cave, CaveAlert, CaveId, Device, Latest, RangeKey, Reading, Scenario, SensorKey } from '../domain/types';
+import { SENSOR_CAVES, getSensorCave } from '../config/caves';
+import { getBioSnapshot } from '../biodb';
+import type { CaveAlert, CaveId, Device, Latest, RangeKey, Reading, Scenario, SensorKey } from '../domain/types';
 import * as an from './analytics';
 import * as sim from './simulator';
 
@@ -22,10 +22,6 @@ function computeAlerts(now: number): CaveAlert[] {
   const bucket = Math.floor(now / 60_000);
   if (!alertCache || alertCache.bucket !== bucket) alertCache = { bucket, data: sim.alerts(now, SIM_START) };
   return alertCache.data;
-}
-
-export function getCaves(): Promise<Cave[]> {
-  return respond(() => CAVES);
 }
 
 export function getLatest(caveId?: CaveId): Promise<Latest[]> {
@@ -53,40 +49,37 @@ export function getAlerts(caveId?: CaveId): Promise<CaveAlert[]> {
   });
 }
 
-export function getSpecies(caveId: CaveId) {
-  return respond(() =>
-    OCCURRENCES.filter((o) => o.caveId === caveId).map((o) => ({
-      occurrence: o,
-      species: SPECIES.find((s) => s.id === o.speciesId)!,
-    })),
-  );
-}
-
 export interface CaveAnalytics {
   caveId: CaveId;
   health: number;
   vulnerability: an.VulnerabilityResult;
   refugia: ReturnType<typeof an.climateRefugia>;
   speciesRisk: an.SpeciesRisk[];
+  /** ดัชนี 7 มิติ 0..1 สำหรับ radar */
+  indices: an.CaveIndices;
 }
 
-function analyticsFor(caveId: CaveId, latest: Latest[]): CaveAnalytics {
+function analyticsFor(caveId: CaveId, latest: Latest[], bio: ReturnType<typeof getBioSnapshot>): CaveAnalytics {
   const own = latest.filter((l) => l.caveId === caveId);
   const health = an.healthIndex(own);
   const vulnerability = an.vulnerability(caveId, health);
+  const refugia = an.climateRefugia(vulnerability, getSensorCave(caveId).mockIndices.buffering);
+  const speciesRisk = an.speciesRisk(caveId, own, bio.species, bio.occurrences);
   return {
     caveId,
     health,
     vulnerability,
-    refugia: an.climateRefugia(vulnerability),
-    speciesRisk: an.speciesRisk(caveId, own),
+    refugia,
+    speciesRisk,
+    indices: an.caveIndices(caveId, health, vulnerability, refugia.score, speciesRisk),
   };
 }
 
 export function getAnalytics(): Promise<CaveAnalytics[]> {
   return respond(() => {
     const latest = sim.allLatest(Date.now(), SIM_START);
-    return CAVES.map((c) => analyticsFor(c.id, latest));
+    const bio = getBioSnapshot();
+    return SENSOR_CAVES.map((c) => analyticsFor(c.id, latest, bio));
   });
 }
 

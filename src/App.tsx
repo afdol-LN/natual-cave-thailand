@@ -1,13 +1,19 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { getCaveConfig } from './config/caves';
 import { SENSORS } from './config/sensors';
 import { fmtAgo } from './domain/format';
 import { severity } from './domain/status';
 import DashboardPage from './features/dashboard/DashboardPage';
 import SensorsPage from './features/sensors/SensorsPage';
+import CaveForm from './features/registry/CaveForm';
+import RegistryPage from './features/registry/RegistryPage';
+import OccurrenceForm from './features/registry/OccurrenceForm';
+import SpeciesForm from './features/registry/SpeciesForm';
+import SpeciesListPage from './features/registry/SpeciesListPage';
+import SpeciesProfile from './features/registry/SpeciesProfile';
 import { useOpenAlerts } from './hooks/queries';
 import { Loading, StatusBadge, StatusGlyph } from './shared/ui';
+import { useCaveName } from './registry';
 import { useUi } from './store';
 
 // Mapbox หนัก → โหลดเฉพาะเมื่อเข้าหน้าภาพรวม
@@ -38,6 +44,9 @@ export default function App() {
           <NavLink to={`/dashboard/${caveId ?? 'all'}`} className="tabs__link">
             Dashboard
           </NavLink>
+          <NavLink to="/registry" className="tabs__link">
+            ฐานข้อมูล
+          </NavLink>
         </nav>
         <AlertCounter />
       </header>
@@ -47,6 +56,15 @@ export default function App() {
             <Route path="/" element={<OverviewPage />} />
             <Route path="/sensors/:caveId?" element={<SensorsPage />} />
             <Route path="/dashboard/:caveId?" element={<DashboardPage />} />
+            <Route path="/registry" element={<RegistryPage />} />
+            <Route path="/registry/new" element={<CaveForm />} />
+            <Route path="/registry/:caveId/edit" element={<CaveForm />} />
+            <Route path="/registry/species" element={<SpeciesListPage />} />
+            <Route path="/registry/species/new" element={<SpeciesForm />} />
+            <Route path="/registry/species/:id" element={<SpeciesProfile />} />
+            <Route path="/registry/species/:id/edit" element={<SpeciesForm />} />
+            <Route path="/registry/occurrence/new" element={<OccurrenceForm />} />
+            <Route path="/registry/occurrence/:id/edit" element={<OccurrenceForm />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
@@ -57,6 +75,7 @@ export default function App() {
 
 function AlertCounter() {
   const open = useOpenAlerts();
+  const caveName = useCaveName();
   const ack = useUi((s) => s.ack);
   const [show, setShow] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -101,7 +120,7 @@ function AlertCounter() {
                 <StatusBadge status={a.level} compact />
                 <div className="alertitem__body">
                   <Link to={`/sensors/${a.caveId}`} className="alertitem__title">
-                    {getCaveConfig(a.caveId).name} · {SENSORS[a.sensor].label}
+                    {caveName(a.caveId)} · {SENSORS[a.sensor].label}
                   </Link>
                   <div className="alertitem__msg">{a.message}</div>
                   <div className="alertitem__time">เริ่ม {fmtAgo(a.start)}</div>

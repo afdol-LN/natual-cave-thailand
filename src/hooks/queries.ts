@@ -6,8 +6,6 @@ import { useUi } from '../store';
 const POLL = 3000;
 const live = { refetchInterval: POLL, placeholderData: keepPreviousData } as const;
 
-export const useCaves = () => useQuery({ queryKey: ['caves'], queryFn: api.getCaves, staleTime: Infinity });
-
 export const useLatest = (caveId?: CaveId) =>
   useQuery({ queryKey: ['latest', caveId ?? 'all'], queryFn: () => api.getLatest(caveId), ...live });
 
@@ -25,8 +23,6 @@ export const useDevices = (caveId?: CaveId) =>
 export const useAlerts = (caveId?: CaveId) =>
   useQuery({ queryKey: ['alerts', caveId ?? 'all'], queryFn: () => api.getAlerts(caveId), ...live });
 
-export const useSpecies = (caveId: CaveId) =>
-  useQuery({ queryKey: ['species', caveId], queryFn: () => api.getSpecies(caveId), staleTime: Infinity });
 
 export const useAnalytics = () => useQuery({ queryKey: ['analytics'], queryFn: api.getAnalytics, ...live });
 

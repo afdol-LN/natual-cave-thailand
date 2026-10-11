@@ -1,7 +1,6 @@
 /** ผลวิเคราะห์เชิงตัดสินใจ (mock) คำนวณจากข้อมูลล่าสุด + ค่าตั้งต้นใน config */
-import { getCaveConfig } from '../config/caves';
+import { getSensorCave, SENSOR_CAVES } from '../config/caves';
 import { SENSORS } from '../config/sensors';
-import { OCCURRENCES, SPECIES } from '../config/species';
 import type { CaveAlert, CaveId, Latest, Scenario, SensorKey, Species, SpeciesOccurrence, Status } from '../domain/types';
 
 const STATUS_PENALTY: Record<Status, number> = { normal: 0, watch: 15, critical: 35, offline: 8 };
@@ -30,17 +29,18 @@ export interface VulnerabilityResult {
 }
 
 export function vulnerability(caveId: CaveId, health: number): VulnerabilityResult {
-  const v = getCaveConfig(caveId).vulnerability;
+  const v = getSensorCave(caveId).vulnerability;
   const exposure = Math.min(1, v.exposure + ((100 - health) / 100) * 0.3);
   const index = (exposure + v.sensitivity + (1 - v.adaptiveCapacity)) / 3;
   return { exposure, sensitivity: v.sensitivity, adaptiveCapacity: v.adaptiveCapacity, index };
 }
 
 export type RefugiaLevel = 'yes' | 'maybe' | 'no';
-export function climateRefugia(vuln: VulnerabilityResult): { level: RefugiaLevel; label: string; score: number } {
-  const score = 1 - vuln.index;
-  if (score >= 0.47) return { level: 'yes', label: 'Climate Refugia: ศักยภาพสูง', score };
-  if (score >= 0.35) return { level: 'maybe', label: 'Climate Refugia: อาจเป็นได้', score };
+/** Climate Refugia (mock): ครึ่งหนึ่งจากความไม่เปราะบาง อีกครึ่งจากความสามารถบัฟเฟอร์ภูมิอากาศ */
+export function climateRefugia(vuln: VulnerabilityResult, buffering: number): { level: RefugiaLevel; label: string; score: number } {
+  const score = 0.5 * (1 - vuln.index) + 0.5 * buffering;
+  if (score >= 0.6) return { level: 'yes', label: 'Climate Refugia: ศักยภาพสูง', score };
+  if (score >= 0.45) return { level: 'maybe', label: 'Climate Refugia: อาจเป็นได้', score };
   return { level: 'no', label: 'ไม่ใช่ Climate Refugia', score };
 }
 
@@ -67,8 +67,8 @@ export interface ForecastPoint {
 }
 
 export function forecastSeries(caveId: CaveId, sensor: SensorKey, scenario: Scenario): ForecastPoint[] {
-  const base = getCaveConfig(caveId).baseline[sensor];
-  const sens = getCaveConfig(caveId).vulnerability.sensitivity;
+  const base = getSensorCave(caveId).baseline[sensor];
+  const sens = getSensorCave(caveId).vulnerability.sensitivity;
   const rate = TREND[sensor][scenario] * (0.7 + sens * 0.6);
   const out: ForecastPoint[] = [];
   for (let y = FORECAST_START; y <= FORECAST_END; y++) {
@@ -93,11 +93,13 @@ export interface SpeciesRisk {
 
 const STRESS: Record<Status, number> = { normal: 0.15, watch: 0.6, critical: 1, offline: 0.35 };
 
-export function speciesRisk(caveId: CaveId, latest: Latest[]): SpeciesRisk[] {
+export function speciesRisk(caveId: CaveId, latest: Latest[], allSpecies: Species[], occurrences: SpeciesOccurrence[]): SpeciesRisk[] {
   const stress = new Map<SensorKey, number>(latest.filter((l) => l.caveId === caveId).map((l) => [l.sensor, STRESS[l.status]]));
-  return OCCURRENCES.filter((o) => o.caveId === caveId)
+  const byId = new Map(allSpecies.map((s) => [s.id, s]));
+  return occurrences
+    .filter((o) => o.caveId === caveId && byId.has(o.speciesId))
     .map((occurrence) => {
-      const species = SPECIES.find((s) => s.id === occurrence.speciesId)!;
+      const species = byId.get(occurrence.speciesId)!;
       let score = 0;
       let driver: SensorKey | null = null;
       for (const [k, sens] of Object.entries(species.sensitivity) as [SensorKey, number][]) {
@@ -107,7 +109,7 @@ export function speciesRisk(caveId: CaveId, latest: Latest[]): SpeciesRisk[] {
           driver = k;
         }
       }
-      if (species.endemic) score += 0.1;
+      if (species.endemism !== 'none') score += 0.1;
       if (occurrence.abundance === 'rare') score += 0.05;
       score = Math.min(1, score);
       const level: RiskLevel = score >= 0.6 ? 'high' : score >= 0.3 ? 'medium' : 'low';
@@ -132,7 +134,7 @@ export function dailyAnomalies(alerts: CaveAlert[], now: number, days = 7): Dail
   const today = Math.floor((now + TZ) / DAY);
   const out: DailyCount[] = [];
   for (let d = today - days + 1; d <= today; d++) {
-    out.push({ day: d * DAY - TZ, counts: { 'CNX-001': 0, 'KRI-001': 0, 'TRG-001': 0 } });
+    out.push({ day: d * DAY - TZ, counts: Object.fromEntries(SENSOR_CAVES.map((c) => [c.id, 0])) });
   }
   for (const a of alerts) {
     if (a.level === 'offline') continue;
@@ -141,4 +143,46 @@ export function dailyAnomalies(alerts: CaveAlert[], now: number, days = 7): Dail
     if (row) row.counts[a.caveId] += 1;
   }
   return out;
+}
+
+// ───────────── 7-dimension cave indices (radar) ─────────────
+
+export const INDEX_KEYS = ['chi', 'cvi', 'cbi', 'esi', 'bii', 'sva', 'cra'] as const;
+export type IndexKey = (typeof INDEX_KEYS)[number];
+
+export interface IndexDef {
+  abbr: string;
+  name: string;
+  th: string;
+  /** false = ค่าสูงหมายถึงแย่ (เปราะบาง) */
+  higherIsBetter: boolean;
+  mock: boolean;
+}
+
+export const INDEX_DEF: Record<IndexKey, IndexDef> = {
+  chi: { abbr: 'CHI', name: 'Cave Health Index', th: 'ดัชนีสุขภาพถ้ำ (จากเซนเซอร์ทั้ง 5)', higherIsBetter: true, mock: false },
+  cvi: { abbr: 'CVI', name: 'Climate Vulnerability Index', th: 'ความเปราะบางต่อภูมิอากาศ', higherIsBetter: false, mock: true },
+  cbi: { abbr: 'CBI', name: 'Climate Buffering Index', th: 'ความสามารถบัฟเฟอร์ภูมิอากาศ', higherIsBetter: true, mock: true },
+  esi: { abbr: 'ESI', name: 'Ecosystem Stability Index', th: 'เสถียรภาพระบบนิเวศ', higherIsBetter: true, mock: true },
+  bii: { abbr: 'BII', name: 'Biodiversity Integrity Index', th: 'ความสมบูรณ์ความหลากหลายทางชีวภาพ', higherIsBetter: true, mock: true },
+  sva: { abbr: 'SVA', name: 'Species Vulnerability Assessment', th: 'ความเปราะบางของชนิดพันธุ์', higherIsBetter: false, mock: true },
+  cra: { abbr: 'CRA', name: 'Climate Refugia Assessment', th: 'ศักยภาพเป็นพื้นที่หลบภัยภูมิอากาศ', higherIsBetter: true, mock: true },
+};
+
+export type CaveIndices = Record<IndexKey, number>;
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** ดัชนี 7 มิติ ทุกค่า normalize เป็น 0..1 */
+export function caveIndices(caveId: CaveId, health: number, vuln: VulnerabilityResult, refugiaScore: number, risks: SpeciesRisk[]): CaveIndices {
+  const m = getSensorCave(caveId).mockIndices;
+  return {
+    chi: clamp01(health / 100),
+    cvi: clamp01(vuln.index),
+    cbi: clamp01(m.buffering),
+    esi: clamp01(m.stability),
+    bii: clamp01(m.biodiversity),
+    sva: clamp01(risks.length ? risks.reduce((s, r) => s + r.score, 0) / risks.length : 0),
+    cra: clamp01(refugiaScore),
+  };
 }

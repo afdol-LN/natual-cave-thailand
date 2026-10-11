@@ -1,12 +1,12 @@
 import { useEffect, type ReactNode } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { CAVES, isCaveId } from '../config/caves';
 import { SENSORS } from '../config/sensors';
 import { fmtValue, RANGE_LABEL } from '../domain/format';
 import { STATUS_LABEL } from '../domain/status';
 import type { CaveId, RangeKey, Reading, SensorKey, Status } from '../domain/types';
 import type { IconType } from 'react-icons';
 import { LuCloud, LuDroplets, LuThermometer, LuTriangleAlert, LuWaves, LuWind } from 'react-icons/lu';
+import { useCaveList } from '../registry';
 import { useUi } from '../store';
 
 /**
@@ -58,6 +58,16 @@ export function StatusGlyph({ status, size = 12, pulse = true }: { status: Statu
 }
 
 /** criticalIcon: แสดงสถานะวิกฤตเป็นไอคอนเตือนแทนข้อความ (ข้อความยังอยู่สำหรับ screen reader) */
+/** ป้ายสำหรับถ้ำที่ยังไม่มีเซนเซอร์ (ถ้ำที่เพิ่มในทะเบียน) */
+export function NoSensorBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className={`badge badge--nosensor${compact ? ' badge--compact' : ''}`}>
+      <span className="nosensor-dot" aria-hidden="true" />
+      <span className="badge__label">ไม่มีเซนเซอร์</span>
+    </span>
+  );
+}
+
 export function StatusBadge({ status, compact = false, criticalIcon = false }: { status: Status; compact?: boolean; criticalIcon?: boolean }) {
   if (criticalIcon && status === 'critical') {
     return (
@@ -189,9 +199,10 @@ export function CaveSwitcher({
   includeAll?: boolean;
   statuses?: Partial<Record<CaveId, Status>>;
 }) {
+  const caves = useCaveList();
   const items: { id: CaveId | 'all'; label: string; sub?: string }[] = [
     ...(includeAll ? [{ id: 'all' as const, label: 'ภาพรวมทั้งหมด' }] : []),
-    ...CAVES.map((c) => ({ id: c.id, label: c.name, sub: c.province })),
+    ...caves.map((c) => ({ id: c.id, label: c.name, sub: c.province })),
   ];
   return (
     <div className="seg" role="tablist" aria-label="เลือกถ้ำ">
@@ -292,16 +303,20 @@ export function useCaveRoute(base: '/sensors' | '/dashboard', allowAll: boolean)
   const { search } = useLocation();
   const stored = useUi((s) => s.caveId);
   const setCave = useUi((s) => s.setCave);
+  const caves = useCaveList();
+  const exists = (id: string | null | undefined): id is CaveId => !!id && caves.some((c) => c.id === id);
 
-  const valid: CaveId | 'all' | null = isCaveId(param) ? param : allowAll && param === 'all' ? 'all' : null;
+  const valid: CaveId | 'all' | null = exists(param) ? param : allowAll && param === 'all' ? 'all' : null;
+  // ถ้ำที่จำไว้อาจถูกลบไปแล้ว → ไม่ใช้ (กัน redirect วน)
+  const fallback = exists(stored) ? stored : allowAll ? 'all' : caves[0].id;
 
   useEffect(() => {
     if (valid === null) {
-      navigate(`${base}/${stored ?? (allowAll ? 'all' : CAVES[0].id)}`, { replace: true });
+      navigate(`${base}/${fallback}`, { replace: true });
     } else if (valid !== 'all' && valid !== stored) {
       setCave(valid);
     }
-  }, [valid, stored, base, allowAll, navigate, setCave]);
+  }, [valid, stored, fallback, base, navigate, setCave]);
 
   const select = (v: CaveId | 'all') => {
     setCave(v === 'all' ? null : v);
